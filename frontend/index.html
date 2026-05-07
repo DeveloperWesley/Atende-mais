@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ATENDE+ | Gestão para profissionais da saúde</title>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot-message" style="font-family: Arial, sans-serif; padding: 32px; color: #10244f;">
+        Carregando ATENDE+...
+      </div>
+    </div>
+    <noscript>Ative o JavaScript para usar o ATENDE+.</noscript>
+    <script>
+      if (window.location.protocol === "file:") {
+        document.getElementById("boot-message").innerHTML =
+          "Abra o ATENDE+ pelo servidor local: <strong>http://localhost:5173</strong>";
+      }
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
