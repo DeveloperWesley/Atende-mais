@@ -165,11 +165,11 @@ export function AppointmentsPage({ patients = [], appointments = [], onCreate, o
           { key: "dateFormatted", label: "Data" },
           { key: "type", label: "Tipo" },
           { key: "amount", label: "Valor" },
-          { key: "status", label: "Pagamento" },
+          { key: "status", label: "Pagamento", badge: true },
           { key: "paymentMethod", label: "Forma" },
           { key: "payer", label: "Pagador" },
           { key: "payerRelation", label: "Vínculo" },
-          { key: "fiscalStatus", label: "Doc." }
+          { key: "fiscalStatus", label: "Doc.", badge: true }
         ]}
         rows={rows}
         onView={crud.setViewing}
@@ -238,7 +238,7 @@ export function FinancePage({ appointments = [], expenses = [] }) {
           { key: "amount", label: "Bruto" },
           { key: "cardFee", label: "Taxa" },
           { key: "netAmount", label: "Líquido" },
-          { key: "status", label: "Status" },
+          { key: "status", label: "Status", badge: true },
           { key: "paymentMethod", label: "Forma" },
           { key: "account", label: "Conta" }
         ]}
@@ -306,7 +306,7 @@ export function ExpensesPage({ expenses = [], onCreate, onDelete }) {
           { key: "dateFormatted", label: "Data" },
           { key: "supplier", label: "Fornecedor" },
           { key: "amount", label: "Valor" },
-          { key: "status", label: "Status" },
+          { key: "status", label: "Status", badge: true },
           { key: "activityExpense", label: "Atividade" },
           { key: "deductible", label: "Dedutível" },
           { key: "attachment", label: "Comprovante" }

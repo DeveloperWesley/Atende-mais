@@ -1,6 +1,8 @@
 import { AlertCircle, BarChart3, CalendarDays, FileText, Plus, ReceiptText, TrendingUp, UserPlus, WalletCards } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
+import { motion } from "framer-motion";
 import { Button } from "../components/Button.jsx";
+import { FinancialTimeline } from "../components/FinancialTimeline.jsx";
 import { isOverdue, money } from "../utils/formatters.js";
 
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"];
@@ -59,12 +61,19 @@ export function Dashboard({ onNavigate, store }) {
       </div>
 
       <div className="summary-cards">
-        {summaryCards.map((card) => (
-          <button className="summary-card" key={card.label} onClick={() => onNavigate(card.label.includes("Despesas") ? "expenses" : "finance")}>
+        {summaryCards.map((card, index) => (
+          <motion.button
+            className={`summary-card ${card.value.startsWith("-") ? "negative" : ""}`}
+            key={card.label}
+            onClick={() => onNavigate(card.label.includes("Despesas") || card.label.includes("Contas") ? "expenses" : "finance")}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.03 }}
+          >
             <card.icon size={24} />
             <span>{card.label}</span>
             <strong>{card.value}</strong>
-          </button>
+          </motion.button>
         ))}
       </div>
 
@@ -100,6 +109,8 @@ export function Dashboard({ onNavigate, store }) {
           </div>
         </article>
       </div>
+
+      <FinancialTimeline appointments={appointments} expenses={expenses} />
 
       <div className="post-login-actions">
         <Button onClick={() => onNavigate("appointments")}><Plus size={17} /> Novo atendimento</Button>

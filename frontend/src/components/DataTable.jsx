@@ -1,4 +1,11 @@
 import { Edit3, Eye, Trash2 } from "lucide-react";
+import { StatusBadge } from "./StatusBadge.jsx";
+
+function renderCell(column, row) {
+  const value = row[column.key];
+  if (column.badge) return <StatusBadge value={value} />;
+  return value || "-";
+}
 
 export function DataTable({ columns, rows, onEdit, onDelete, onView }) {
   return (
@@ -14,7 +21,7 @@ export function DataTable({ columns, rows, onEdit, onDelete, onView }) {
             {columns.map((column) => (
               <div className={column.primary ? "record-field record-primary" : "record-field"} key={column.key}>
                 <span>{column.label}</span>
-                <strong>{row[column.key] || "-"}</strong>
+                <strong>{renderCell(column, row)}</strong>
               </div>
             ))}
           </div>
@@ -41,7 +48,7 @@ export function DataTable({ columns, rows, onEdit, onDelete, onView }) {
           {rows.map((row) => (
             <tr key={row.id}>
               {columns.map((column) => (
-                <td key={column.key}>{row[column.key]}</td>
+                <td key={column.key}>{renderCell(column, row)}</td>
               ))}
               {(onView || onEdit || onDelete) && (
                 <td>

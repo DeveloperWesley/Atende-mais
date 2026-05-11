@@ -4,6 +4,7 @@ import { LoginPage, RecoverPage, RegisterPage } from "./pages/AuthPages.jsx";
 import { Dashboard } from "./pages/Dashboard.jsx";
 import { AppointmentsPage, ExpensesPage, FinancePage, FiscalPage, PatientsPage, ReportsPage, SettingsPage } from "./pages/CrudPages.jsx";
 import { LandingPage } from "./pages/LandingPage.jsx";
+import { DashboardSkeleton } from "./components/Skeleton.jsx";
 import { money, parseCurrency } from "./utils/formatters.js";
 
 const protectedPages = new Set(["dashboard", "patients", "appointments", "finance", "expenses", "reports", "fiscal", "settings"]);
@@ -21,6 +22,7 @@ export function App() {
   const [user, setUser] = useState(() => loadJson("atende_user", null));
   const [store, setStore] = useState(() => loadJson("atende_store", emptyStore));
   const [page, setPage] = useState(user ? "dashboard" : "landing");
+  const [booting, setBooting] = useState(false);
 
   function persistStore(nextStore) {
     setStore(nextStore);
@@ -28,8 +30,10 @@ export function App() {
   }
 
   function handleLogin(nextUser) {
+    setBooting(true);
     setUser(nextUser);
     localStorage.setItem("atende_user", JSON.stringify(nextUser));
+    window.setTimeout(() => setBooting(false), 450);
   }
 
   function handleLogout() {
@@ -148,7 +152,7 @@ export function App() {
   }
 
   const pages = {
-    dashboard: <Dashboard onNavigate={setPage} store={store} />,
+    dashboard: booting ? <DashboardSkeleton /> : <Dashboard onNavigate={setPage} store={store} />,
     patients: <PatientsPage patients={store.patients} appointments={store.appointments} onCreate={addPatient} onDelete={(id) => deleteRecord("patients", id)} />,
     appointments: <AppointmentsPage patients={store.patients} appointments={store.appointments} onCreate={addAppointment} onDelete={(id) => deleteRecord("appointments", id)} />,
     finance: <FinancePage appointments={store.appointments} expenses={store.expenses} />,
