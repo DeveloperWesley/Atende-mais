@@ -14,7 +14,6 @@ import { Logo } from "../components/Logo.jsx";
 
 const nav = [
   { id: "dashboard", label: "Resumo", icon: Home },
-  { id: "agenda", label: "Agenda", icon: CalendarDays },
   { id: "appointments", label: "Atendimentos", icon: CalendarDays },
   { id: "finance", label: "Receitas", icon: WalletCards },
   { id: "expenses", label: "Despesas", icon: ReceiptText },
@@ -35,8 +34,8 @@ export function AppLayout({ activePage, onNavigate, children, user, onLogout }) 
               <Bell size={18} />
             </button>
             <div className="topbar-profile">
-              <img src={doctorProfile} alt="Dra. Jennyff" />
-              <span>Dra. Jennyff</span>
+              <img src={doctorProfile} alt={user?.name || "Usuário"} />
+              <span>{user?.name || "Usuário"}</span>
               <ChevronDown size={16} />
             </div>
             <button className="logout icon-action" onClick={onLogout} aria-label="Sair">

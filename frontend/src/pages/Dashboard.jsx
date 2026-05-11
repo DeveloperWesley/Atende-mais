@@ -1,10 +1,7 @@
-import { BarChart3, CalendarDays, FileText, Plus, ReceiptText, UserPlus, WalletCards } from "lucide-react";
+import { AlertCircle, BarChart3, CalendarDays, FileText, Plus, ReceiptText, TrendingUp, UserPlus, WalletCards } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Button } from "../components/Button.jsx";
-
-function money(value) {
-  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
+import { isOverdue, money } from "../utils/formatters.js";
 
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"];
 
@@ -14,10 +11,19 @@ export function Dashboard({ onNavigate, store }) {
   const expenses = store?.expenses || [];
   const appointmentsToday = appointments.filter((item) => item.date?.slice(0, 10) === today).length;
   const revenue = appointments.filter((item) => item.status === "Pago").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+  const pendingRevenue = appointments.filter((item) => item.status === "Pendente" || item.status === "Parcelado").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
   const expenseTotal = expenses.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
-  const pendingPatients = appointments
-    .filter((item) => item.status !== "Pago")
-    .map((item) => ({ name: item.patient, value: item.amount }));
+  const overdueExpenses = expenses.filter((item) => isOverdue(item.dueDate, item.status)).length;
+  const unpaidAppointments = appointments.filter((item) => item.status !== "Pago" && item.status !== "Cancelado").length;
+  const missingCpf = appointments.filter((item) => !item.payerCpf).length;
+  const noReceiptExpenses = expenses.filter((item) => !item.attachment).length;
+  const missingFiscalStatus = appointments.filter((item) => !item.fiscalStatus || item.fiscalStatus === "Pendente").length;
+  const incompletePatients = (store?.patients || []).filter((item) => !item.cpf || !item.phone).length;
+  const pendingPatients = [
+    ...appointments.filter((item) => !item.payerCpf).map((item) => ({ name: `${item.patient}: falta CPF do pagador`, value: item.amount, target: "appointments" })),
+    ...appointments.filter((item) => item.status !== "Pago" && item.status !== "Cancelado").map((item) => ({ name: `${item.patient}: pagamento ${item.status?.toLowerCase()}`, value: item.amount, target: "finance" })),
+    ...expenses.filter((item) => !item.attachment).map((item) => ({ name: `${item.category}: sem comprovante`, value: item.amount, target: "expenses" }))
+  ].slice(0, 8);
   const chartData = months.map((month) => ({ month, receitas: 0, despesas: 0 }));
 
   appointments.forEach((item) => {
@@ -37,7 +43,12 @@ export function Dashboard({ onNavigate, store }) {
   const summaryCards = [
     { label: "Atendimentos hoje", value: String(appointmentsToday), icon: CalendarDays },
     { label: "Receitas do mês", value: money(revenue), icon: WalletCards },
-    { label: "Despesas do mês", value: money(expenseTotal), icon: BarChart3 }
+    { label: "Receitas pendentes", value: money(pendingRevenue), icon: AlertCircle },
+    { label: "Despesas do mês", value: money(expenseTotal), icon: BarChart3 },
+    { label: "Resultado mensal", value: money(revenue - expenseTotal), icon: TrendingUp },
+    { label: "Contas vencidas", value: String(overdueExpenses), icon: ReceiptText },
+    { label: "Sem pagamento", value: String(unpaidAppointments), icon: CalendarDays },
+    { label: "Sem CPF/Doc.", value: String(missingCpf + noReceiptExpenses + missingFiscalStatus + incompletePatients), icon: AlertCircle }
   ];
 
   return (
@@ -81,7 +92,7 @@ export function Dashboard({ onNavigate, store }) {
             {pendingPatients.length === 0 ? (
               <p className="empty-state">Nenhuma pendência cadastrada.</p>
             ) : pendingPatients.map((patient) => (
-              <button key={patient.name} onClick={() => onNavigate("finance")}>
+              <button key={patient.name} onClick={() => onNavigate(patient.target)}>
                 <span>{patient.name}</span>
                 <strong>{patient.value}</strong>
               </button>
@@ -94,7 +105,7 @@ export function Dashboard({ onNavigate, store }) {
         <Button onClick={() => onNavigate("appointments")}><Plus size={17} /> Novo atendimento</Button>
         <Button variant="soft" onClick={() => onNavigate("patients")}><UserPlus size={17} /> Novo paciente</Button>
         <Button variant="soft" onClick={() => onNavigate("expenses")}><ReceiptText size={17} /> Nova despesa</Button>
-        <Button variant="dark" onClick={() => onNavigate("fiscal")}><FileText size={17} /> Enviar base ao contador</Button>
+        <Button variant="dark" onClick={() => onNavigate("reports")}><FileText size={17} /> Relatórios</Button>
       </div>
     </section>
   );

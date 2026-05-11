@@ -1,143 +1,380 @@
+import { useMemo, useState } from "react";
 import { Download, FileSpreadsheet } from "lucide-react";
 import { Button } from "../components/Button.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { DataTable } from "../components/DataTable.jsx";
+import { DetailDrawer } from "../components/DetailDrawer.jsx";
+import { Filters } from "../components/Filters.jsx";
 import { QuickForm } from "../components/QuickForm.jsx";
-import { appointments, expenses, patients, reports } from "../data/mockData.js";
+import { reports } from "../data/mockData.js";
+import { exportCsv, exportPrint } from "../utils/exporters.js";
+import { formatDate, formatDateTime, isOverdue, money } from "../utils/formatters.js";
 
-function money(value) {
-  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const paymentStatuses = ["Pago", "Pendente", "Vencido", "Cancelado"];
+const paymentMethods = ["Pix", "Dinheiro", "Cartão", "Transferência", "Boleto"];
+const appointmentTypes = ["Consulta", "Retorno", "Procedimento", "Avaliação", "Outro"];
+
+function normalize(value) {
+  return String(value || "").toLowerCase();
 }
 
-export function PatientsPage({ patients: patientRows = patients, onCreate }) {
+function useCrudState() {
+  const [editing, setEditing] = useState(null);
+  const [viewing, setViewing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  return { editing, setEditing, viewing, setViewing, deleting, setDeleting };
+}
+
+export function PatientsPage({ patients = [], appointments = [], onCreate, onDelete }) {
+  const crud = useCrudState();
+  const [filters, setFilters] = useState({ search: "" });
+  const rows = patients
+    .filter((patient) => !filters.search || normalize(`${patient.name} ${patient.cpf} ${patient.phone}`).includes(normalize(filters.search)))
+    .map((patient) => {
+      const history = appointments.filter((item) => item.patient === patient.name);
+      const pending = history.filter((item) => item.status !== "Pago").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+      return {
+        ...patient,
+        birthFormatted: formatDate(patient.birth),
+        pending: money(pending),
+        historyCount: `${history.length} atend.`
+      };
+    });
+
   return (
-    <ResourcePage title="Pacientes" eyebrow="Cadastro simples para atendimentos e recebimentos">
+    <ResourcePage title="Pacientes" eyebrow="Cadastro simples para atendimentos, contato e responsáveis">
       <QuickForm
-        title="Novo paciente"
+        title={crud.editing ? "Editar paciente" : "Novo paciente"}
+        editingItem={crud.editing}
+        onCancelEdit={() => crud.setEditing(null)}
+        onSubmit={(values) => { onCreate(values); crud.setEditing(null); }}
         fields={[
           { name: "name", label: "Nome completo", required: true },
-          { name: "cpf", label: "CPF" },
+          { name: "cpf", label: "CPF", mask: "cpfCnpj" },
           { name: "birth", label: "Data de nascimento", type: "date" },
-          { name: "phone", label: "Telefone" },
+          { name: "phone", label: "Telefone/WhatsApp", mask: "phone" },
           { name: "email", label: "E-mail", type: "email" },
-          { name: "responsible", label: "Responsável pelo pagamento, se houver" }
+          { name: "address", label: "Endereço" },
+          { name: "responsible", label: "Responsável financeiro/pagador" },
+          { name: "responsibleCpf", label: "CPF/CNPJ do responsável", mask: "cpfCnpj" },
+          { name: "notes", label: "Observações" }
         ]}
-        onSubmit={onCreate}
+      />
+      <Filters
+        filters={[{ name: "search", label: "Buscar", placeholder: "Nome, CPF ou telefone" }]}
+        values={filters}
+        onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
+        onClear={() => setFilters({ search: "" })}
       />
       <DataTable
         columns={[
+          { key: "name", label: "Paciente", primary: true },
+          { key: "cpf", label: "CPF" },
+          { key: "phone", label: "WhatsApp" },
+          { key: "responsible", label: "Pagador" },
+          { key: "pending", label: "Pendente" },
+          { key: "historyCount", label: "Histórico" }
+        ]}
+        rows={rows}
+        onView={crud.setViewing}
+        onEdit={crud.setEditing}
+        onDelete={crud.setDeleting}
+      />
+      <DetailDrawer
+        item={crud.viewing}
+        title="Detalhes do paciente"
+        onClose={() => crud.setViewing(null)}
+        fields={[
           { key: "name", label: "Nome" },
           { key: "cpf", label: "CPF" },
-          { key: "phone", label: "Telefone" },
+          { key: "birthFormatted", label: "Nascimento" },
+          { key: "phone", label: "Telefone/WhatsApp" },
           { key: "email", label: "E-mail" },
-          { key: "pending", label: "Pendente" }
+          { key: "address", label: "Endereço" },
+          { key: "responsible", label: "Responsável financeiro" },
+          { key: "responsibleCpf", label: "CPF/CNPJ do responsável" },
+          { key: "notes", label: "Observações" }
         ]}
-        rows={patientRows}
       />
+      <ConfirmDialog item={crud.deleting} onCancel={() => crud.setDeleting(null)} onConfirm={(item) => { onDelete(item.id); crud.setDeleting(null); }} />
     </ResourcePage>
   );
 }
 
-export function AppointmentsPage({ patients: patientRows = patients, appointments: appointmentRows = appointments, onCreate }) {
+export function AppointmentsPage({ patients = [], appointments = [], onCreate, onDelete }) {
+  const crud = useCrudState();
+  const [filters, setFilters] = useState({ patient: "", status: "", type: "", from: "", to: "" });
+  const rows = appointments
+    .filter((item) => !filters.patient || item.patient === filters.patient)
+    .filter((item) => !filters.status || item.status === filters.status)
+    .filter((item) => !filters.type || item.type === filters.type)
+    .filter((item) => !filters.from || item.date?.slice(0, 10) >= filters.from)
+    .filter((item) => !filters.to || item.date?.slice(0, 10) <= filters.to)
+    .map((item) => ({
+      ...item,
+      dateFormatted: formatDateTime(item.date),
+      receivedFormatted: formatDate(item.receivedAt),
+      status: isOverdue(item.receivedAt, item.status) ? "Vencido" : item.status
+    }));
+
   return (
-    <ResourcePage title="Atendimentos" eyebrow="Registre a rotina do atendimento; o sistema organiza os dados para o contador">
+    <ResourcePage title="Atendimentos" eyebrow="Registro simples da rotina, com dados úteis para financeiro e contador">
+      {patients.length === 0 && <div className="notice-card">Cadastre um paciente antes de lançar atendimentos.</div>}
       <QuickForm
-        title="Novo atendimento"
+        title={crud.editing ? "Editar atendimento" : "Novo atendimento"}
+        editingItem={crud.editing}
+        onCancelEdit={() => crud.setEditing(null)}
+        onSubmit={(values) => { onCreate(values); crud.setEditing(null); }}
         fields={[
-          { name: "patient", label: "Paciente", type: "select", options: patientRows.map((item) => item.name), required: true },
-          { name: "date", label: "Data do atendimento", type: "datetime-local", required: true },
-          { name: "type", label: "Tipo", placeholder: "Consulta, retorno, procedimento" },
+          { name: "patient", label: "Paciente", type: "select", options: patients.map((item) => item.name), required: true },
+          { name: "date", label: "Data e horário", type: "datetime-local", required: true },
+          { name: "type", label: "Tipo", type: "select", options: appointmentTypes },
           { name: "specialty", label: "Especialidade" },
-          { name: "amount", label: "Valor", type: "number" },
-          { name: "payment", label: "Pagamento", type: "select", options: ["Pago", "Pendente", "Parcelado"] },
+          { name: "amount", label: "Valor", type: "number", required: true },
+          { name: "payment", label: "Status do pagamento", type: "select", options: paymentStatuses },
+          { name: "paymentMethod", label: "Forma de pagamento", type: "select", options: paymentMethods },
+          { name: "cardFee", label: "Taxas de cartão", type: "number" },
           { name: "receivedAt", label: "Data do recebimento", type: "date" },
-          { name: "payer", label: "Quem pagou?", placeholder: "Paciente, pai, mãe ou responsável" },
-          { name: "payerCpf", label: "CPF de quem pagou" },
-          { name: "payerRelation", label: "Vínculo com o paciente", type: "select", options: ["Próprio paciente", "Pai", "Mãe", "Responsável", "Empresa", "Outro"] }
+          { name: "payer", label: "Quem pagou?" },
+          { name: "payerCpf", label: "CPF/CNPJ de quem pagou", mask: "cpfCnpj" },
+          { name: "payerRelation", label: "Vínculo", type: "select", options: ["Próprio paciente", "Pai", "Mãe", "Responsável", "Empresa", "Outro"] },
+          { name: "coverage", label: "Convênio ou particular", type: "select", options: ["Particular", "Convênio"] },
+          { name: "location", label: "Modalidade", type: "select", options: ["Presencial", "Online", "Domiciliar"] },
+          { name: "receiptNumber", label: "Recibo/NF" },
+          { name: "fiscalStatus", label: "Status documental", type: "select", options: ["Pendente", "Recibo emitido", "NF emitida"] },
+          { name: "account", label: "Conta de recebimento" },
+          { name: "attachment", label: "Comprovante/anexo" },
+          { name: "notes", label: "Observações" }
         ]}
-        onSubmit={onCreate}
+      />
+      <Filters
+        filters={[
+          { name: "patient", label: "Paciente", type: "select", options: patients.map((item) => item.name) },
+          { name: "status", label: "Status", type: "select", options: paymentStatuses },
+          { name: "type", label: "Tipo", type: "select", options: appointmentTypes },
+          { name: "from", label: "De", type: "date" },
+          { name: "to", label: "Até", type: "date" }
+        ]}
+        values={filters}
+        onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
+        onClear={() => setFilters({ patient: "", status: "", type: "", from: "", to: "" })}
       />
       <DataTable
         columns={[
-          { key: "patient", label: "Paciente" },
-          { key: "date", label: "Data" },
+          { key: "patient", label: "Paciente", primary: true },
+          { key: "dateFormatted", label: "Data" },
           { key: "type", label: "Tipo" },
           { key: "amount", label: "Valor" },
-          { key: "status", label: "Status" },
+          { key: "status", label: "Pagamento" },
+          { key: "paymentMethod", label: "Forma" },
           { key: "payer", label: "Pagador" },
           { key: "payerRelation", label: "Vínculo" },
-          { key: "accounting", label: "Status dos dados" }
+          { key: "fiscalStatus", label: "Doc." }
         ]}
-        rows={appointmentRows}
+        rows={rows}
+        onView={crud.setViewing}
+        onEdit={crud.setEditing}
+        onDelete={crud.setDeleting}
       />
+      <DetailDrawer item={crud.viewing} title="Detalhes do atendimento" onClose={() => crud.setViewing(null)} fields={[
+        { key: "patient", label: "Paciente" },
+        { key: "patientCpf", label: "CPF do paciente" },
+        { key: "payer", label: "Pagador" },
+        { key: "payerCpf", label: "CPF/CNPJ do pagador" },
+        { key: "payerRelation", label: "Vínculo" },
+        { key: "amount", label: "Valor bruto" },
+        { key: "cardFee", label: "Taxas" },
+        { key: "netAmount", label: "Valor líquido" },
+        { key: "paymentMethod", label: "Forma" },
+        { key: "account", label: "Conta" },
+        { key: "receiptNumber", label: "Recibo/NF" },
+        { key: "notes", label: "Observações" }
+      ]} />
+      <ConfirmDialog item={crud.deleting} onCancel={() => crud.setDeleting(null)} onConfirm={(item) => { onDelete(item.id); crud.setDeleting(null); }} />
     </ResourcePage>
   );
 }
 
-export function FinancePage({ appointments: appointmentRows = appointments, expenses: expenseRows = expenses }) {
-  const received = appointmentRows.filter((item) => item.status === "Pago").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
-  const pending = appointmentRows.filter((item) => item.status !== "Pago").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
-  const expenseTotal = expenseRows.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+export function FinancePage({ appointments = [], expenses = [] }) {
+  const [filters, setFilters] = useState({ status: "", patient: "", method: "", from: "", to: "" });
+  const rows = appointments
+    .filter((item) => !filters.status || item.status === filters.status)
+    .filter((item) => !filters.patient || item.patient === filters.patient)
+    .filter((item) => !filters.method || item.paymentMethod === filters.method)
+    .filter((item) => !filters.from || item.date?.slice(0, 10) >= filters.from)
+    .filter((item) => !filters.to || item.date?.slice(0, 10) <= filters.to)
+    .map((item) => ({ ...item, dateFormatted: formatDateTime(item.date) }));
+
+  const received = appointments.filter((item) => item.status === "Pago").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+  const pending = appointments.filter((item) => item.status === "Pendente" || item.status === "Parcelado").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+  const canceled = appointments.filter((item) => item.status === "Cancelado").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+  const fees = appointments.reduce((sum, item) => sum + Number(item.cardFeeNumber || 0), 0);
+  const expenseTotal = expenses.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
 
   return (
-    <ResourcePage title="Financeiro" eyebrow="Receitas, despesas e resultado">
+    <ResourcePage title="Receitas" eyebrow="Acompanhe recebidos, pendentes, vencidos, cancelados e valor líquido">
       <div className="finance-summary">
-        <article><span>Receitas recebidas</span><strong>{money(received)}</strong></article>
+        <article><span>Receita bruta recebida</span><strong>{money(received)}</strong></article>
         <article><span>Receitas pendentes</span><strong>{money(pending)}</strong></article>
-        <article><span>Despesas</span><strong>{money(expenseTotal)}</strong></article>
-        <article><span>Resultado mensal</span><strong>{money(received - expenseTotal)}</strong></article>
+        <article><span>Taxas de cartão</span><strong>{money(fees)}</strong></article>
+        <article><span>Resultado líquido</span><strong>{money(received - fees - expenseTotal)}</strong></article>
       </div>
+      <Filters
+        filters={[
+          { name: "patient", label: "Paciente", type: "select", options: [...new Set(appointments.map((item) => item.patient).filter(Boolean))] },
+          { name: "status", label: "Status", type: "select", options: paymentStatuses },
+          { name: "method", label: "Forma", type: "select", options: paymentMethods },
+          { name: "from", label: "De", type: "date" },
+          { name: "to", label: "Até", type: "date" }
+        ]}
+        values={filters}
+        onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
+        onClear={() => setFilters({ status: "", patient: "", method: "", from: "", to: "" })}
+      />
       <DataTable
         columns={[
-          { key: "patient", label: "Origem" },
-          { key: "date", label: "Data" },
-          { key: "amount", label: "Valor" },
-          { key: "status", label: "Status" }
+          { key: "patient", label: "Paciente", primary: true },
+          { key: "dateFormatted", label: "Atendimento" },
+          { key: "amount", label: "Bruto" },
+          { key: "cardFee", label: "Taxa" },
+          { key: "netAmount", label: "Líquido" },
+          { key: "status", label: "Status" },
+          { key: "paymentMethod", label: "Forma" },
+          { key: "account", label: "Conta" }
         ]}
-        rows={appointmentRows}
+        rows={rows}
       />
     </ResourcePage>
   );
 }
 
-export function ExpensesPage({ expenses: expenseRows = expenses, onCreate }) {
+export function ExpensesPage({ expenses = [], onCreate, onDelete }) {
+  const crud = useCrudState();
+  const [filters, setFilters] = useState({ status: "", category: "", from: "", to: "" });
+  const rows = expenses
+    .filter((item) => !filters.status || item.status === filters.status)
+    .filter((item) => !filters.category || item.category === filters.category)
+    .filter((item) => !filters.from || item.date >= filters.from)
+    .filter((item) => !filters.to || item.date <= filters.to)
+    .map((item) => ({
+      ...item,
+      dateFormatted: formatDate(item.date),
+      status: isOverdue(item.dueDate, item.status) ? "Vencida" : item.status
+    }));
+
   return (
-    <ResourcePage title="Despesas" eyebrow="Controle os gastos da rotina profissional">
+    <ResourcePage title="Despesas" eyebrow="Controle gastos, comprovantes, vencimentos e despesas da atividade">
       <QuickForm
-        title="Nova despesa"
+        title={crud.editing ? "Editar despesa" : "Nova despesa"}
+        editingItem={crud.editing}
+        onCancelEdit={() => crud.setEditing(null)}
+        onSubmit={(values) => { onCreate(values); crud.setEditing(null); }}
         fields={[
           { name: "date", label: "Data", type: "date", required: true },
-          { name: "category", label: "Categoria", type: "select", options: ["Aluguel", "Energia", "Internet", "Materiais", "Equipamentos", "Contabilidade", "Sistemas", "Outras"] },
-          { name: "amount", label: "Valor", type: "number" },
-          { name: "method", label: "Forma de pagamento" },
+          { name: "competence", label: "Competência", type: "month" },
+          { name: "category", label: "Categoria", type: "select", options: ["Aluguel", "Energia", "Internet", "Materiais", "Equipamentos", "Contabilidade", "Sistemas", "Outras"], required: true },
+          { name: "supplier", label: "Fornecedor" },
+          { name: "supplierDocument", label: "CPF/CNPJ fornecedor", mask: "cpfCnpj" },
+          { name: "invoiceNumber", label: "Número da nota fiscal" },
+          { name: "amount", label: "Valor", type: "number", required: true },
+          { name: "method", label: "Forma de pagamento", type: "select", options: paymentMethods },
+          { name: "dueDate", label: "Data de vencimento", type: "date" },
+          { name: "paidAt", label: "Data de pagamento", type: "date" },
+          { name: "status", label: "Status", type: "select", options: ["Paga", "Pendente", "Vencida"] },
+          { name: "type", label: "Tipo", type: "select", options: ["Fixa", "Variável", "Eventual"] },
+          { name: "activityExpense", label: "Despesa da atividade?", type: "select", options: ["Sim", "Não"] },
+          { name: "deductible", label: "Dedutível livro-caixa/IRPF?", type: "select", options: ["Sim", "Não"] },
           { name: "attachment", label: "Comprovante/anexo" },
-          { name: "deductible", label: "Despesa da atividade?", type: "select", options: ["Sim", "Não"] }
+          { name: "recurrence", label: "Recorrência mensal?", type: "select", options: ["Sim", "Não"] },
+          { name: "notes", label: "Observações" }
         ]}
-        onSubmit={onCreate}
+      />
+      <Filters
+        filters={[
+          { name: "status", label: "Status", type: "select", options: ["Paga", "Pendente", "Vencida"] },
+          { name: "category", label: "Categoria", type: "select", options: [...new Set(expenses.map((item) => item.category).filter(Boolean))] },
+          { name: "from", label: "De", type: "date" },
+          { name: "to", label: "Até", type: "date" }
+        ]}
+        values={filters}
+        onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
+        onClear={() => setFilters({ status: "", category: "", from: "", to: "" })}
       />
       <DataTable
         columns={[
-          { key: "date", label: "Data" },
-          { key: "category", label: "Categoria" },
+          { key: "category", label: "Categoria", primary: true },
+          { key: "dateFormatted", label: "Data" },
+          { key: "supplier", label: "Fornecedor" },
           { key: "amount", label: "Valor" },
-          { key: "deductible", label: "Da atividade" }
+          { key: "status", label: "Status" },
+          { key: "activityExpense", label: "Atividade" },
+          { key: "deductible", label: "Dedutível" },
+          { key: "attachment", label: "Comprovante" }
         ]}
-        rows={expenseRows}
+        rows={rows}
+        onView={crud.setViewing}
+        onEdit={crud.setEditing}
+        onDelete={crud.setDeleting}
       />
+      <DetailDrawer item={crud.viewing} title="Detalhes da despesa" onClose={() => crud.setViewing(null)} fields={[
+        { key: "supplier", label: "Fornecedor" },
+        { key: "supplierDocument", label: "CPF/CNPJ" },
+        { key: "invoiceNumber", label: "NF" },
+        { key: "dueDate", label: "Vencimento" },
+        { key: "paidAt", label: "Pagamento" },
+        { key: "method", label: "Forma" },
+        { key: "type", label: "Tipo" },
+        { key: "recurrence", label: "Recorrência" },
+        { key: "notes", label: "Observações" }
+      ]} />
+      <ConfirmDialog item={crud.deleting} onCancel={() => crud.setDeleting(null)} onConfirm={(item) => { onDelete(item.id); crud.setDeleting(null); }} />
     </ResourcePage>
   );
 }
 
-export function ReportsPage() {
+export function ReportsPage({ appointments = [], expenses = [], patients = [] }) {
+  const [filters, setFilters] = useState({ month: "", year: "", patient: "", status: "" });
+  const filteredAppointments = appointments
+    .filter((item) => !filters.patient || item.patient === filters.patient)
+    .filter((item) => !filters.status || item.status === filters.status)
+    .filter((item) => !filters.month || item.date?.slice(5, 7) === filters.month)
+    .filter((item) => !filters.year || item.date?.slice(0, 4) === filters.year);
+
+  const reportRows = filteredAppointments.map((item) => ({
+    paciente: item.patient,
+    cpfPaciente: item.patientCpf,
+    pagador: item.payer,
+    cpfPagador: item.payerCpf,
+    vinculo: item.payerRelation,
+    data: formatDateTime(item.date),
+    recebidoEm: formatDate(item.receivedAt),
+    valor: item.amount,
+    status: item.status,
+    forma: item.paymentMethod,
+    documento: item.fiscalStatus
+  }));
+
   return (
-    <ResourcePage title="Relatórios" eyebrow="Exportações financeiras para gestão e contabilidade">
+    <ResourcePage title="Relatórios" eyebrow="Filtros e exportações para gestão, contador e obrigações">
+      <Filters
+        filters={[
+          { name: "month", label: "Mês", type: "select", options: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"] },
+          { name: "year", label: "Ano", placeholder: "2026" },
+          { name: "patient", label: "Paciente", type: "select", options: patients.map((item) => item.name) },
+          { name: "status", label: "Status", type: "select", options: paymentStatuses }
+        ]}
+        values={filters}
+        onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
+        onClear={() => setFilters({ month: "", year: "", patient: "", status: "" })}
+      />
       <div className="report-grid">
-        {reports.map((report) => (
+        {reports.concat(["Relatório anual para IRPF", "Livro-caixa", "Inadimplência", "Atendimentos sem documentação fiscal"]).map((report) => (
           <article className="report-card" key={report}>
             <FileSpreadsheet size={26} />
             <strong>{report}</strong>
             <div>
-              <Button variant="soft"><Download size={16} /> CSV</Button>
-              <Button variant="soft"><Download size={16} /> PDF</Button>
+              <Button variant="soft" onClick={() => exportCsv(`${report}.csv`, reportRows.length ? reportRows : [{ aviso: "Sem dados para exportar" }])}><Download size={16} /> CSV</Button>
+              <Button variant="soft" onClick={() => exportPrint(report)}><Download size={16} /> PDF</Button>
             </div>
           </article>
         ))}
@@ -146,49 +383,33 @@ export function ReportsPage() {
   );
 }
 
-export function FiscalPage({ appointments: appointmentRows = appointments, expenses: expenseRows = expenses }) {
-  const revenue = appointmentRows.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
-  const expenseTotal = expenseRows.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
-  const missingData = appointmentRows.filter((item) => !item.payerCpf || !item.receivedAt && item.status === "Pago").length;
+export function FiscalPage({ appointments = [], expenses = [], patients = [] }) {
+  const revenue = appointments.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+  const expenseTotal = expenses.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+  const missingCpf = appointments.filter((item) => !item.payerCpf).length;
+  const noPaymentMethod = appointments.filter((item) => !item.paymentMethod).length;
+  const noExpenseReceipt = expenses.filter((item) => !item.attachment).length;
+  const incompletePatients = patients.filter((item) => !item.cpf || !item.phone).length;
 
   return (
-    <ResourcePage title="Contabilidade" eyebrow="Dados organizados para o contador cumprir as obrigações sem complicar a rotina do profissional">
+    <ResourcePage title="Painel do contador/admin" eyebrow="Conferência dos dados alimentados pelos profissionais">
       <div className="accountant-summary">
-        <article>
-          <span>Mês em organização</span>
-          <strong>Maio/2026</strong>
-          <small>Lançamentos feitos na rotina do consultório</small>
-        </article>
-        <article>
-          <span>Receitas organizadas</span>
-          <strong>{money(revenue)}</strong>
-          <small>Paciente, pagador, vínculo e recebimento</small>
-        </article>
-        <article>
-          <span>Despesas registradas</span>
-          <strong>{money(expenseTotal)}</strong>
-          <small>Categoria, comprovante e uso na atividade</small>
-        </article>
-        <article>
-          <span>Pendências para corrigir</span>
-          <strong>{missingData} itens</strong>
-          <small>Itens simples que faltam para fechar o mês</small>
-        </article>
+        <article><span>Profissionais vinculados</span><strong>1</strong><small>Dra. Jennyff</small></article>
+        <article><span>Receita mensal</span><strong>{money(revenue)}</strong><small>Paciente, pagador e vínculo</small></article>
+        <article><span>Despesas da atividade</span><strong>{money(expenseTotal)}</strong><small>Com dedutibilidade e comprovantes</small></article>
+        <article><span>Pendências documentais</span><strong>{missingCpf + noPaymentMethod + noExpenseReceipt + incompletePatients}</strong><small>Itens para cobrar do cliente</small></article>
       </div>
-
       <div className="fiscal-grid accountant-grid">
         {[
-          ["Conferência do contador", "Validar os dados lançados pelo profissional sem exigir que ele entenda regras fiscais."],
-          ["Base para obrigações", "Exportar informações para IRPF, Carnê-Leão, Receita Saúde, notas fiscais ou rotina definida pela contabilidade."],
-          ["Pendências simples", "Mostrar atendimentos sem CPF do pagador, recebimentos sem data, despesas sem comprovante e vínculos não informados."],
-          ["Pacote contábil", "Gerar CSV/PDF com receitas, despesas, pacientes, pagadores, vínculos e anexos para fechamento do mês."]
+          ["Atendimentos sem CPF do pagador", `${missingCpf} registros precisam de CPF/CNPJ do pagador.`],
+          ["Receitas sem forma de pagamento", `${noPaymentMethod} receitas sem Pix, cartão, dinheiro, transferência ou boleto.`],
+          ["Despesas sem comprovante", `${noExpenseReceipt} despesas sem anexo ou referência de comprovante.`],
+          ["Pacientes incompletos", `${incompletePatients} pacientes sem CPF ou telefone para conferência.`]
         ].map(([title, text]) => (
           <article className="panel" key={title}>
             <h2>{title}</h2>
             <p>{text}</p>
-            <Button variant={title === "Pendências para o cliente" ? "soft" : "dark"}>
-              {title === "Pendências para o cliente" ? "Ver pendências" : "Gerar base"}
-            </Button>
+            <Button variant="dark" onClick={() => exportCsv(`${title}.csv`, appointments.concat(expenses))}>Exportar base</Button>
           </article>
         ))}
       </div>
@@ -203,11 +424,11 @@ export function SettingsPage() {
         title="Dados profissionais"
         fields={[
           { name: "name", label: "Nome completo" },
-          { name: "document", label: "CPF/CNPJ" },
+          { name: "document", label: "CPF/CNPJ", mask: "cpfCnpj" },
           { name: "profession", label: "Profissão" },
           { name: "council", label: "Conselho profissional" },
           { name: "email", label: "E-mail", type: "email" },
-          { name: "phone", label: "Telefone" }
+          { name: "phone", label: "Telefone", mask: "phone" }
         ]}
       />
     </ResourcePage>

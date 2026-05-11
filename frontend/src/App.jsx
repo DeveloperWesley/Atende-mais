@@ -4,8 +4,9 @@ import { LoginPage, RecoverPage, RegisterPage } from "./pages/AuthPages.jsx";
 import { Dashboard } from "./pages/Dashboard.jsx";
 import { AppointmentsPage, ExpensesPage, FinancePage, FiscalPage, PatientsPage, ReportsPage, SettingsPage } from "./pages/CrudPages.jsx";
 import { LandingPage } from "./pages/LandingPage.jsx";
+import { money, parseCurrency } from "./utils/formatters.js";
 
-const protectedPages = new Set(["dashboard", "patients", "agenda", "appointments", "finance", "expenses", "reports", "fiscal", "settings"]);
+const protectedPages = new Set(["dashboard", "patients", "appointments", "finance", "expenses", "reports", "fiscal", "settings"]);
 const emptyStore = { patients: [], appointments: [], expenses: [] };
 
 function loadJson(key, fallback) {
@@ -14,11 +15,6 @@ function loadJson(key, fallback) {
   } catch {
     return fallback;
   }
-}
-
-function formatCurrency(value) {
-  const number = Number(value || 0);
-  return number.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export function App() {
@@ -43,49 +39,99 @@ export function App() {
   }
 
   function addPatient(values) {
+    const patient = {
+      id: values.id || crypto.randomUUID(),
+      name: values.name,
+      cpf: values.cpf,
+      birth: values.birth,
+      phone: values.phone,
+      email: values.email,
+      address: values.address,
+      notes: values.notes,
+      responsible: values.responsible,
+      responsibleCpf: values.responsibleCpf,
+      pending: money(0)
+    };
+
     persistStore({
       ...store,
-      patients: [{ id: crypto.randomUUID(), pending: formatCurrency(0), ...values }, ...store.patients]
+      patients: values.id ? store.patients.map((item) => item.id === values.id ? patient : item) : [patient, ...store.patients]
     });
   }
 
   function addAppointment(values) {
     const patient = store.patients.find((item) => item.name === values.patient);
     const status = values.payment || "Pendente";
+    const amountNumber = parseCurrency(values.amount);
+    const cardFeeNumber = parseCurrency(values.cardFee);
+    const netAmountNumber = Math.max(amountNumber - cardFeeNumber, 0);
+    const appointment = {
+      id: values.id || crypto.randomUUID(),
+      patient: values.patient,
+      patientCpf: patient?.cpf || "",
+      date: values.date,
+      type: values.type || "Consulta",
+      specialty: values.specialty,
+      amount: money(amountNumber),
+      amountNumber,
+      status,
+      paymentMethod: values.paymentMethod,
+      cardFee: money(cardFeeNumber),
+      cardFeeNumber,
+      netAmount: money(netAmountNumber),
+      netAmountNumber,
+      receivedAt: values.receivedAt,
+      payer: values.payer || values.patient,
+      payerCpf: values.payerCpf,
+      payerRelation: values.payerRelation || "Próprio paciente",
+      coverage: values.coverage,
+      location: values.location,
+      receiptNumber: values.receiptNumber,
+      fiscalStatus: values.fiscalStatus || "Pendente",
+      account: values.account,
+      attachment: values.attachment,
+      notes: values.notes,
+      accounting: values.payerCpf ? "Dados completos" : "Falta CPF do pagador"
+    };
+
     persistStore({
       ...store,
-      appointments: [{
-        id: crypto.randomUUID(),
-        patient: values.patient,
-        patientCpf: patient?.cpf || "",
-        date: values.date,
-        type: values.type || "Consulta",
-        amount: formatCurrency(values.amount),
-        amountNumber: Number(values.amount || 0),
-        status,
-        receivedAt: values.receivedAt,
-        payer: values.payer || values.patient,
-        payerCpf: values.payerCpf,
-        payerRelation: values.payerRelation || "Próprio paciente",
-        accounting: values.payerCpf ? "Dados completos" : "Falta CPF do pagador"
-      }, ...store.appointments]
+      appointments: values.id ? store.appointments.map((item) => item.id === values.id ? appointment : item) : [appointment, ...store.appointments]
     });
   }
 
   function addExpense(values) {
+    const amountNumber = parseCurrency(values.amount);
+    const expense = {
+      id: values.id || crypto.randomUUID(),
+      date: values.date,
+      competence: values.competence,
+      category: values.category,
+      supplier: values.supplier,
+      supplierDocument: values.supplierDocument,
+      invoiceNumber: values.invoiceNumber,
+      amount: money(amountNumber),
+      amountNumber,
+      method: values.method,
+      dueDate: values.dueDate,
+      paidAt: values.paidAt,
+      status: values.status || "Pendente",
+      type: values.type,
+      activityExpense: values.activityExpense || "Sim",
+      deductible: values.deductible || "Não",
+      attachment: values.attachment,
+      notes: values.notes,
+      recurrence: values.recurrence || "Não"
+    };
+
     persistStore({
       ...store,
-      expenses: [{
-        id: crypto.randomUUID(),
-        date: values.date,
-        category: values.category,
-        amount: formatCurrency(values.amount),
-        amountNumber: Number(values.amount || 0),
-        method: values.method,
-        attachment: values.attachment,
-        deductible: values.deductible || "Não"
-      }, ...store.expenses]
+      expenses: values.id ? store.expenses.map((item) => item.id === values.id ? expense : item) : [expense, ...store.expenses]
     });
+  }
+
+  function deleteRecord(collection, id) {
+    persistStore({ ...store, [collection]: store[collection].filter((item) => item.id !== id) });
   }
 
   if (page === "login") return <LoginPage onNavigate={setPage} onLogin={handleLogin} />;
@@ -103,13 +149,12 @@ export function App() {
 
   const pages = {
     dashboard: <Dashboard onNavigate={setPage} store={store} />,
-    agenda: <AppointmentsPage patients={store.patients} appointments={store.appointments} onCreate={addAppointment} />,
-    patients: <PatientsPage patients={store.patients} onCreate={addPatient} />,
-    appointments: <AppointmentsPage patients={store.patients} appointments={store.appointments} onCreate={addAppointment} />,
+    patients: <PatientsPage patients={store.patients} appointments={store.appointments} onCreate={addPatient} onDelete={(id) => deleteRecord("patients", id)} />,
+    appointments: <AppointmentsPage patients={store.patients} appointments={store.appointments} onCreate={addAppointment} onDelete={(id) => deleteRecord("appointments", id)} />,
     finance: <FinancePage appointments={store.appointments} expenses={store.expenses} />,
-    expenses: <ExpensesPage expenses={store.expenses} onCreate={addExpense} />,
-    reports: <ReportsPage />,
-    fiscal: <FiscalPage appointments={store.appointments} expenses={store.expenses} />,
+    expenses: <ExpensesPage expenses={store.expenses} onCreate={addExpense} onDelete={(id) => deleteRecord("expenses", id)} />,
+    reports: <ReportsPage appointments={store.appointments} expenses={store.expenses} patients={store.patients} />,
+    fiscal: <FiscalPage appointments={store.appointments} expenses={store.expenses} patients={store.patients} />,
     settings: <SettingsPage />
   };
 
