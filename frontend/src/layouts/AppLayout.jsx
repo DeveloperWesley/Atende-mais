@@ -90,9 +90,14 @@ export function AppLayout({ activePage, onNavigate, children, user, onLogout }) 
                 </button>
               ))}
             </nav>
-            <button className="collapse-control" onClick={() => setCollapsed((value) => !value)}>
+            <button
+              className="collapse-control"
+              onClick={() => setCollapsed((value) => !value)}
+              aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+              title={collapsed ? "Expandir menu" : "Recolher menu"}
+            >
               <Menu size={17} />
-              <span>Recolher menu</span>
+              <span>{collapsed ? "Expandir menu" : "Recolher menu"}</span>
             </button>
           </aside>
 
