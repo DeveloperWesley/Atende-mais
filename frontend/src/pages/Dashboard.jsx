@@ -1,5 +1,5 @@
-import { AlertCircle, BarChart3, CalendarDays, FileText, Plus, ReceiptText, TrendingUp, UserPlus, WalletCards } from "lucide-react";
-import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
+import { AlertCircle, BarChart3, CalendarDays, CheckCircle2, FileText, Plus, ReceiptText, TrendingUp, UserPlus, WalletCards } from "lucide-react";
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { motion } from "framer-motion";
 import { Button } from "../components/Button.jsx";
 import { FinancialTimeline } from "../components/FinancialTimeline.jsx";
@@ -42,28 +42,25 @@ export function Dashboard({ onNavigate, store }) {
     }
   });
 
+  const result = revenue - expenseTotal;
   const summaryCards = [
-    { label: "Atendimentos hoje", value: String(appointmentsToday), icon: CalendarDays },
-    { label: "Receitas do mês", value: money(revenue), icon: WalletCards },
-    { label: "Receitas pendentes", value: money(pendingRevenue), icon: AlertCircle },
-    { label: "Despesas do mês", value: money(expenseTotal), icon: BarChart3 },
-    { label: "Resultado mensal", value: money(revenue - expenseTotal), icon: TrendingUp },
-    { label: "Contas vencidas", value: String(overdueExpenses), icon: ReceiptText },
-    { label: "Sem pagamento", value: String(unpaidAppointments), icon: CalendarDays },
-    { label: "Sem CPF/Doc.", value: String(missingCpf + noReceiptExpenses + missingFiscalStatus + incompletePatients), icon: AlertCircle }
+    { label: "Atendimentos hoje", value: String(appointmentsToday), icon: CalendarDays, tone: "blue", trend: "+0%" },
+    { label: "Receitas do mês", value: money(revenue), icon: WalletCards, tone: "green", trend: "+0%" },
+    { label: "Despesas do mês", value: money(expenseTotal), icon: BarChart3, tone: "red", trend: "0%" },
+    { label: "Resultado do mês", value: money(result), icon: TrendingUp, tone: result < 0 ? "red" : "green", trend: result < 0 ? "negativo" : "positivo" }
   ];
 
   return (
     <section className="dashboard-home">
       <div className="dashboard-greeting">
-        <h1>Olá, Dra. Jennyff</h1>
+        <h1>Olá, Dra. Jennyff <span aria-hidden="true">👋</span></h1>
         <p>Aqui está o resumo do seu consultório hoje.</p>
       </div>
 
       <div className="summary-cards">
         {summaryCards.map((card, index) => (
           <motion.button
-            className={`summary-card ${card.value.startsWith("-") ? "negative" : ""}`}
+            className={`summary-card ${card.value.startsWith("-") ? "negative" : ""} ${card.tone}`}
             key={card.label}
             onClick={() => onNavigate(card.label.includes("Despesas") || card.label.includes("Contas") ? "expenses" : "finance")}
             initial={{ opacity: 0, y: 14 }}
@@ -73,19 +70,35 @@ export function Dashboard({ onNavigate, store }) {
             <card.icon size={24} />
             <span>{card.label}</span>
             <strong>{card.value}</strong>
+            <small>{card.trend}</small>
           </motion.button>
         ))}
       </div>
 
       <div className="dashboard-main-grid">
         <article className="finance-chart-card">
-          <h2>Receitas x Despesas</h2>
-          <ResponsiveContainer width="100%" height={210}>
+          <div className="panel-heading">
+            <div>
+              <h2>Receitas x Despesas</h2>
+              <p>Comparativo financeiro dos últimos meses</p>
+            </div>
+            <select aria-label="Período do gráfico" defaultValue="Este mês">
+              <option>Este mês</option>
+              <option>Últimos 6 meses</option>
+              <option>Este ano</option>
+            </select>
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData} margin={{ top: 30, right: 18, left: 8, bottom: 12 }}>
+              <CartesianGrid strokeDasharray="4 8" vertical={false} stroke="rgba(100,115,146,0.18)" />
+              <XAxis dataKey="month" axisLine={false} tickLine={false} />
+              <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `${value / 1000}k`} />
               <Tooltip
+                contentStyle={{ border: "0", borderRadius: "12px", boxShadow: "0 16px 40px rgba(8,36,92,.16)" }}
                 formatter={(value) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                 labelFormatter={(label) => `Mês: ${label}`}
               />
+              <Legend iconType="circle" />
               <Line type="monotone" dataKey="receitas" stroke="#18b889" strokeWidth={4} dot={{ r: 4, fill: "#18b889", strokeWidth: 0 }} />
               <Line type="monotone" dataKey="despesas" stroke="#ff4d59" strokeWidth={4} dot={{ r: 4, fill: "#ff4d59", strokeWidth: 0 }} />
             </LineChart>
@@ -96,10 +109,20 @@ export function Dashboard({ onNavigate, store }) {
         </article>
 
         <article className="pending-panel">
-          <h2>Pendências</h2>
+          <div className="panel-heading">
+            <div>
+              <h2>Pendências</h2>
+              <p>Itens que precisam de atenção</p>
+            </div>
+          </div>
           <div className="pending-list">
             {pendingPatients.length === 0 ? (
-              <p className="empty-state">Nenhuma pendência cadastrada.</p>
+              <div className="empty-pending">
+                <CheckCircle2 size={54} />
+                <strong>Nenhuma pendência cadastrada.</strong>
+                <span>Tudo em dia! 🎉</span>
+                <button onClick={() => onNavigate("finance")}>Ver todas as pendências</button>
+              </div>
             ) : pendingPatients.map((patient) => (
               <button key={patient.name} onClick={() => onNavigate(patient.target)}>
                 <span>{patient.name}</span>
@@ -113,10 +136,11 @@ export function Dashboard({ onNavigate, store }) {
       <FinancialTimeline appointments={appointments} expenses={expenses} />
 
       <div className="post-login-actions">
-        <Button onClick={() => onNavigate("appointments")}><Plus size={17} /> Novo atendimento</Button>
-        <Button variant="soft" onClick={() => onNavigate("patients")}><UserPlus size={17} /> Novo paciente</Button>
-        <Button variant="soft" onClick={() => onNavigate("expenses")}><ReceiptText size={17} /> Nova despesa</Button>
-        <Button variant="dark" onClick={() => onNavigate("reports")}><FileText size={17} /> Relatórios</Button>
+        <button className="quick-action primary" onClick={() => onNavigate("appointments")}><Plus size={17} /> Novo atendimento</button>
+        <button className="quick-action cyan" onClick={() => onNavigate("patients")}><UserPlus size={17} /> Novo paciente</button>
+        <button className="quick-action green" onClick={() => onNavigate("finance")}><WalletCards size={17} /> Nova receita</button>
+        <button className="quick-action red" onClick={() => onNavigate("expenses")}><ReceiptText size={17} /> Nova despesa</button>
+        <button className="quick-action dark" onClick={() => onNavigate("reports")}><FileText size={17} /> Relatórios</button>
       </div>
     </section>
   );

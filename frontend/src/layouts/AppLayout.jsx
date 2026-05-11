@@ -49,12 +49,6 @@ export function AppLayout({ activePage, onNavigate, children, user, onLogout }) 
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <div className="app-frame">
         <header className="app-frame-top">
-          <div className="app-brand-group">
-            <button className="icon-action" onClick={() => setCollapsed((value) => !value)} aria-label="Recolher menu">
-              <Menu size={19} />
-            </button>
-            <Logo />
-          </div>
           <div className="app-context">
             <span>Você está em</span>
             <strong>{activeLabel}</strong>
@@ -65,6 +59,7 @@ export function AppLayout({ activePage, onNavigate, children, user, onLogout }) 
             </button>
             <button className="icon-action" aria-label="Notificações">
               <Bell size={18} />
+              <i className="notification-dot" />
             </button>
             <div className="topbar-profile">
               <img src={doctorProfile} alt={user?.name || "Usuário"} />
@@ -79,6 +74,9 @@ export function AppLayout({ activePage, onNavigate, children, user, onLogout }) 
 
         <div className="app-frame-body">
           <aside className="sidebar">
+            <div className="sidebar-brand">
+              <Logo />
+            </div>
             <nav>
               {visibleNav.map((item, index) => (
                 <button
@@ -92,6 +90,10 @@ export function AppLayout({ activePage, onNavigate, children, user, onLogout }) 
                 </button>
               ))}
             </nav>
+            <button className="collapse-control" onClick={() => setCollapsed((value) => !value)}>
+              <Menu size={17} />
+              <span>Recolher menu</span>
+            </button>
           </aside>
 
           <motion.main
