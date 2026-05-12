@@ -1,7 +1,6 @@
-import { AlertCircle, BarChart3, CalendarDays, CheckCircle2, FileText, Plus, ReceiptText, TrendingUp, UserPlus, WalletCards } from "lucide-react";
+import { BarChart3, CalendarDays, CheckCircle2, FileText, Plus, ReceiptText, TrendingUp, UserPlus, WalletCards } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { motion } from "framer-motion";
-import { Button } from "../components/Button.jsx";
 import { FinancialTimeline } from "../components/FinancialTimeline.jsx";
 import { isOverdue, money } from "../utils/formatters.js";
 
@@ -52,9 +51,19 @@ export function Dashboard({ onNavigate, store }) {
 
   return (
     <section className="dashboard-home">
-      <div className="dashboard-greeting">
-        <h1>Olá, Dra. Jennyff <span aria-hidden="true">👋</span></h1>
-        <p>Aqui está o resumo do seu consultório hoje.</p>
+      <div className="dashboard-hero-row">
+        <div className="dashboard-greeting">
+          <h1>Olá, Dra. Jennyff <span aria-hidden="true">👋</span></h1>
+          <p>Aqui está o resumo do seu consultório hoje.</p>
+        </div>
+
+        <div className="post-login-actions" aria-label="Ações rápidas">
+          <button className="quick-action primary" onClick={() => onNavigate("appointments")}><Plus size={17} /> Novo atendimento</button>
+          <button className="quick-action cyan" onClick={() => onNavigate("patients")}><UserPlus size={17} /> Novo paciente</button>
+          <button className="quick-action green" onClick={() => onNavigate("finance")}><WalletCards size={17} /> Nova receita</button>
+          <button className="quick-action red" onClick={() => onNavigate("expenses")}><ReceiptText size={17} /> Nova despesa</button>
+          <button className="quick-action dark" onClick={() => onNavigate("reports")}><FileText size={17} /> Relatórios</button>
+        </div>
       </div>
 
       <div className="summary-cards">
@@ -134,14 +143,6 @@ export function Dashboard({ onNavigate, store }) {
       </div>
 
       <FinancialTimeline appointments={appointments} expenses={expenses} />
-
-      <div className="post-login-actions">
-        <button className="quick-action primary" onClick={() => onNavigate("appointments")}><Plus size={17} /> Novo atendimento</button>
-        <button className="quick-action cyan" onClick={() => onNavigate("patients")}><UserPlus size={17} /> Novo paciente</button>
-        <button className="quick-action green" onClick={() => onNavigate("finance")}><WalletCards size={17} /> Nova receita</button>
-        <button className="quick-action red" onClick={() => onNavigate("expenses")}><ReceiptText size={17} /> Nova despesa</button>
-        <button className="quick-action dark" onClick={() => onNavigate("reports")}><FileText size={17} /> Relatórios</button>
-      </div>
     </section>
   );
 }
