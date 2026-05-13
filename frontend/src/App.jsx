@@ -5,7 +5,7 @@ import { Dashboard } from "./pages/Dashboard.jsx";
 import { AppointmentsPage, ExpensesPage, FinancePage, FiscalPage, PatientsPage, ReportsPage, SettingsPage } from "./pages/CrudPages.jsx";
 import { LandingPage } from "./pages/LandingPage.jsx";
 import { DashboardSkeleton } from "./components/Skeleton.jsx";
-import { money, parseCurrency } from "./utils/formatters.js";
+import { money, onlyDigits, parseCurrency } from "./utils/formatters.js";
 
 const protectedPages = new Set(["dashboard", "patients", "appointments", "finance", "expenses", "reports", "fiscal", "settings"]);
 const emptyStore = { patients: [], appointments: [], expenses: [] };
@@ -16,6 +16,10 @@ function loadJson(key, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function normalizeName(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
 export function App() {
@@ -102,9 +106,47 @@ export function App() {
       notes: values.notes,
       accounting: values.payerCpf && patientCpf ? "Dados completos" : "Dados incompletos"
     };
+    const existingPatientIndex = store.patients.findIndex((item) => {
+      const sameDocument = patientCpf && item.cpf && onlyDigits(item.cpf) === onlyDigits(patientCpf);
+      const sameName = normalizeName(item.name) === normalizeName(patientName);
+      return sameDocument || sameName;
+    });
+    const nextPatients = [...store.patients];
+    const patientData = {
+      name: patientName,
+      cpf: patientCpf,
+      responsible: sameAsPayer ? "" : values.payer,
+      responsibleCpf: sameAsPayer ? "" : values.payerCpf
+    };
+
+    if (patientName && existingPatientIndex >= 0) {
+      const current = nextPatients[existingPatientIndex];
+      nextPatients[existingPatientIndex] = {
+        ...current,
+        cpf: current.cpf || patientData.cpf,
+        responsible: current.responsible || patientData.responsible,
+        responsibleCpf: current.responsibleCpf || patientData.responsibleCpf,
+        pending: current.pending || money(0)
+      };
+    } else if (patientName) {
+      nextPatients.unshift({
+        id: crypto.randomUUID(),
+        name: patientData.name,
+        cpf: patientData.cpf,
+        birth: "",
+        phone: "",
+        email: "",
+        address: "",
+        notes: "Criado automaticamente a partir de um atendimento.",
+        responsible: patientData.responsible,
+        responsibleCpf: patientData.responsibleCpf,
+        pending: money(0)
+      });
+    }
 
     persistStore({
       ...store,
+      patients: nextPatients,
       appointments: values.id ? store.appointments.map((item) => item.id === values.id ? appointment : item) : [appointment, ...store.appointments]
     });
   }

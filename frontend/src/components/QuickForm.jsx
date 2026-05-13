@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Button } from "./Button.jsx";
 import { formatCpfCnpj, formatPhone, onlyDigits } from "../utils/formatters.js";
 
 export function QuickForm({ title, fields, submitLabel = "Salvar", onSubmit, editingItem, onCancelEdit }) {
+  const formId = useId().replaceAll(":", "");
   const dataFields = useMemo(() => fields.filter((field) => field.name), [fields]);
   const initialValues = useMemo(
     () => Object.fromEntries(dataFields.map((field) => [field.name, editingItem?.[field.name] ?? field.defaultValue ?? (field.type === "checkbox" ? false : "")])),
@@ -36,7 +37,11 @@ export function QuickForm({ title, fields, submitLabel = "Salvar", onSubmit, edi
     if (field?.mask === "cpfCnpj") nextValue = formatCpfCnpj(value);
     if (field?.mask === "phone") nextValue = formatPhone(value);
 
-    setValues((current) => ({ ...current, [fieldName]: nextValue }));
+    setValues((current) => {
+      const nextValues = { ...current, [fieldName]: nextValue };
+      const sideEffects = field?.onValueChange?.(nextValue, nextValues) || {};
+      return { ...nextValues, ...sideEffects };
+    });
   }
 
   function handleSubmit(event) {
@@ -93,6 +98,8 @@ export function QuickForm({ title, fields, submitLabel = "Salvar", onSubmit, edi
             field.type === "checkbox" ? "checkbox-field" : ""
           ].filter(Boolean).join(" ");
 
+          const listId = field.suggestions?.length ? `${formId}-${field.name}-list` : undefined;
+
           return (
           <label className={className} key={field.name}>
             {field.type === "checkbox" ? (
@@ -132,6 +139,7 @@ export function QuickForm({ title, fields, submitLabel = "Salvar", onSubmit, edi
             ) : field.type !== "checkbox" ? (
               <input
                 type={field.type || "text"}
+                list={listId}
                 placeholder={field.placeholder}
                 required={required}
                 disabled={disabled}
@@ -140,6 +148,13 @@ export function QuickForm({ title, fields, submitLabel = "Salvar", onSubmit, edi
               />
             ) : (
               null
+            )}
+            {listId && (
+              <datalist id={listId}>
+                {field.suggestions.map((suggestion) => (
+                  <option key={suggestion} value={suggestion} />
+                ))}
+              </datalist>
             )}
             {field.help && <small className="field-help">{field.help}</small>}
             {errors[field.name] && <small className="field-error">{errors[field.name]}</small>}

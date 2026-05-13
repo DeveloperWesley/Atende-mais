@@ -18,6 +18,10 @@ function normalize(value) {
   return String(value || "").toLowerCase();
 }
 
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
 function useCrudState() {
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
@@ -50,7 +54,7 @@ export function PatientsPage({ patients = [], appointments = [], onCreate, onDel
         onSubmit={(values) => { onCreate(values); crud.setEditing(null); }}
         fields={[
           { name: "name", label: "Nome completo", required: true },
-          { name: "cpf", label: "CPF", mask: "cpfCnpj" },
+          { name: "cpf", label: "CPF/CNPJ", mask: "cpfCnpj" },
           { name: "birth", label: "Data de nascimento", type: "date" },
           { name: "phone", label: "Telefone/WhatsApp", mask: "phone" },
           { name: "email", label: "E-mail", type: "email" },
@@ -61,7 +65,7 @@ export function PatientsPage({ patients = [], appointments = [], onCreate, onDel
         ]}
       />
       <Filters
-        filters={[{ name: "search", label: "Buscar", placeholder: "Nome, CPF ou telefone" }]}
+        filters={[{ name: "search", label: "Buscar", placeholder: "Nome, CPF/CNPJ ou telefone" }]}
         values={filters}
         onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
         onClear={() => setFilters({ search: "" })}
@@ -69,7 +73,7 @@ export function PatientsPage({ patients = [], appointments = [], onCreate, onDel
       <DataTable
         columns={[
           { key: "name", label: "Paciente", primary: true },
-          { key: "cpf", label: "CPF" },
+          { key: "cpf", label: "CPF/CNPJ" },
           { key: "phone", label: "WhatsApp" },
           { key: "responsible", label: "Pagador" },
           { key: "pending", label: "Pendente" },
@@ -86,7 +90,7 @@ export function PatientsPage({ patients = [], appointments = [], onCreate, onDel
         onClose={() => crud.setViewing(null)}
         fields={[
           { key: "name", label: "Nome" },
-          { key: "cpf", label: "CPF" },
+          { key: "cpf", label: "CPF/CNPJ" },
           { key: "birthFormatted", label: "Nascimento" },
           { key: "phone", label: "Telefone/WhatsApp" },
           { key: "email", label: "E-mail" },
@@ -104,6 +108,21 @@ export function PatientsPage({ patients = [], appointments = [], onCreate, onDel
 export function AppointmentsPage({ patients = [], appointments = [], onCreate, onDelete }) {
   const crud = useCrudState();
   const [filters, setFilters] = useState({ search: "", documentNeed: "", from: "", to: "" });
+  const patientSuggestions = unique([...patients.map((item) => item.name), ...appointments.map((item) => item.patient)]);
+  const payerSuggestions = unique([
+    ...patients.map((item) => item.name),
+    ...patients.map((item) => item.responsible),
+    ...appointments.map((item) => item.payer)
+  ]);
+  const patientByName = new Map([
+    ...patients.map((item) => [normalize(item.name), item]),
+    ...appointments.map((item) => [normalize(item.patient), { name: item.patient, cpf: item.patientCpf }])
+  ]);
+  const payerByName = new Map([
+    ...patients.map((item) => [normalize(item.name), { name: item.name, cpf: item.cpf }]),
+    ...patients.filter((item) => item.responsible).map((item) => [normalize(item.responsible), { name: item.responsible, cpf: item.responsibleCpf }]),
+    ...appointments.map((item) => [normalize(item.payer), { name: item.payer, cpf: item.payerCpf }])
+  ]);
   const editingAppointment = crud.editing ? {
     ...crud.editing,
     patientName: crud.editing.patientName || crud.editing.patient,
@@ -133,12 +152,33 @@ export function AppointmentsPage({ patients = [], appointments = [], onCreate, o
           { name: "date", label: "Data do atendimento", type: "date", required: true },
           { name: "amount", label: "Valor recebido (R$)", type: "text", placeholder: "Ex: 150,00", required: true },
           { type: "section", label: "Pagador" },
-          { name: "payer", label: "Nome do pagador", placeholder: "Nome completo", required: true },
+          {
+            name: "payer",
+            label: "Nome do pagador",
+            placeholder: "Digite para buscar ou cadastrar novo",
+            required: true,
+            suggestions: payerSuggestions,
+            onValueChange: (value) => {
+              const payer = payerByName.get(normalize(value));
+              return payer?.cpf ? { payerCpf: payer.cpf } : {};
+            }
+          },
           { name: "payerCpf", label: "CPF/CNPJ do pagador (11 ou 14 dígitos)", placeholder: "Somente números", mask: "cpfCnpj", digits: [11, 14], required: true, help: "Use CPF para pessoa física ou CNPJ para empresa/responsável PJ." },
           { name: "sameAsPayer", label: "Paciente é o mesmo do pagador", type: "checkbox", defaultValue: false },
           { type: "section", label: "Paciente" },
-          { name: "patientName", label: "Nome do paciente", placeholder: "Nome completo", required: (values) => !values.sameAsPayer, hiddenWhen: (values) => values.sameAsPayer },
-          { name: "patientCpf", label: "CPF do paciente (11 dígitos)", placeholder: "Somente números", mask: "cpfCnpj", digits: 11, required: (values) => !values.sameAsPayer, hiddenWhen: (values) => values.sameAsPayer },
+          {
+            name: "patientName",
+            label: "Nome do paciente",
+            placeholder: "Digite para buscar ou cadastrar novo",
+            required: (values) => !values.sameAsPayer,
+            hiddenWhen: (values) => values.sameAsPayer,
+            suggestions: patientSuggestions,
+            onValueChange: (value) => {
+              const patient = patientByName.get(normalize(value));
+              return patient?.cpf ? { patientCpf: patient.cpf } : {};
+            }
+          },
+          { name: "patientCpf", label: "CPF/CNPJ do paciente (11 ou 14 dígitos)", placeholder: "Somente números", mask: "cpfCnpj", digits: [11, 14], required: (values) => !values.sameAsPayer, hiddenWhen: (values) => values.sameAsPayer },
           { name: "documentNeed", label: "Paciente vai precisar de NF ou recibo?", type: "select", options: documentNeeds, required: true },
           { name: "notes", label: "Observações", type: "textarea", span: "full", placeholder: "Opcional" }
         ]}
@@ -157,7 +197,7 @@ export function AppointmentsPage({ patients = [], appointments = [], onCreate, o
       <DataTable
         columns={[
           { key: "patient", label: "Paciente", primary: true },
-          { key: "patientCpf", label: "CPF paciente" },
+          { key: "patientCpf", label: "CPF/CNPJ paciente" },
           { key: "dateFormatted", label: "Atendimento" },
           { key: "amount", label: "Valor" },
           { key: "payer", label: "Pagador" },
@@ -171,7 +211,7 @@ export function AppointmentsPage({ patients = [], appointments = [], onCreate, o
       />
       <DetailDrawer item={crud.viewing} title="Detalhes do atendimento" onClose={() => crud.setViewing(null)} fields={[
         { key: "patient", label: "Paciente" },
-        { key: "patientCpf", label: "CPF do paciente" },
+        { key: "patientCpf", label: "CPF/CNPJ do paciente" },
         { key: "payer", label: "Pagador" },
         { key: "payerCpf", label: "CPF/CNPJ do pagador" },
         { key: "payerRelation", label: "Vínculo" },
@@ -394,7 +434,7 @@ export function FiscalPage({ appointments = [], expenses = [], patients = [] }) 
       <div className="fiscal-grid accountant-grid">
         {[
           ["Atendimentos sem CPF do pagador", `${missingCpf} registros precisam de CPF/CNPJ do pagador.`],
-          ["Atendimentos sem CPF do paciente", `${missingPatientCpf} registros precisam de CPF do paciente.`],
+          ["Atendimentos sem CPF/CNPJ do paciente", `${missingPatientCpf} registros precisam de CPF/CNPJ do paciente.`],
           ["Despesas sem comprovante", `${noExpenseReceipt} despesas sem anexo ou referência de comprovante.`],
           ["Pacientes incompletos", `${incompletePatients} pacientes sem CPF ou telefone para conferência.`]
         ].map(([title, text]) => (
