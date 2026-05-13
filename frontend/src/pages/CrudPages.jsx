@@ -12,7 +12,7 @@ import { formatDate, formatDateTime, isOverdue, money } from "../utils/formatter
 
 const paymentStatuses = ["Pago", "Pendente", "Vencido", "Cancelado"];
 const paymentMethods = ["Pix", "Dinheiro", "Cartão", "Transferência", "Boleto"];
-const appointmentTypes = ["Consulta", "Retorno", "Procedimento", "Avaliação", "Outro"];
+const documentNeeds = ["Não precisa", "Recibo", "Nota fiscal"];
 
 function normalize(value) {
   return String(value || "").toLowerCase();
@@ -103,73 +103,66 @@ export function PatientsPage({ patients = [], appointments = [], onCreate, onDel
 
 export function AppointmentsPage({ patients = [], appointments = [], onCreate, onDelete }) {
   const crud = useCrudState();
-  const [filters, setFilters] = useState({ patient: "", status: "", type: "", from: "", to: "" });
+  const [filters, setFilters] = useState({ search: "", documentNeed: "", from: "", to: "" });
+  const editingAppointment = crud.editing ? {
+    ...crud.editing,
+    patientName: crud.editing.patientName || crud.editing.patient,
+    documentNeed: crud.editing.documentNeed || (crud.editing.fiscalStatus === "NF emitida" ? "Nota fiscal" : crud.editing.fiscalStatus === "Recibo emitido" ? "Recibo" : "Não precisa"),
+    sameAsPayer: crud.editing.sameAsPayer ?? (crud.editing.patient === crud.editing.payer && crud.editing.patientCpf === crud.editing.payerCpf)
+  } : null;
   const rows = appointments
-    .filter((item) => !filters.patient || item.patient === filters.patient)
-    .filter((item) => !filters.status || item.status === filters.status)
-    .filter((item) => !filters.type || item.type === filters.type)
+    .filter((item) => !filters.search || normalize(`${item.patient} ${item.patientCpf} ${item.payer} ${item.payerCpf}`).includes(normalize(filters.search)))
+    .filter((item) => !filters.documentNeed || item.documentNeed === filters.documentNeed)
     .filter((item) => !filters.from || item.date?.slice(0, 10) >= filters.from)
     .filter((item) => !filters.to || item.date?.slice(0, 10) <= filters.to)
     .map((item) => ({
       ...item,
-      dateFormatted: formatDateTime(item.date),
+      dateFormatted: formatDate(item.date),
       receivedFormatted: formatDate(item.receivedAt),
-      status: isOverdue(item.receivedAt, item.status) ? "Vencido" : item.status
+      documentNeed: item.documentNeed || (item.fiscalStatus === "NF emitida" ? "Nota fiscal" : item.fiscalStatus === "Recibo emitido" ? "Recibo" : "Não precisa")
     }));
 
   return (
-    <ResourcePage title="Atendimentos" eyebrow="Registro simples da rotina, com dados úteis para financeiro e contador">
-      {patients.length === 0 && <div className="notice-card">Cadastre um paciente antes de lançar atendimentos.</div>}
+    <ResourcePage title="Atendimentos" eyebrow="Cadastro enxuto com as informações necessárias para IRPF, recibos, NF e conferência contábil">
       <QuickForm
         title={crud.editing ? "Editar atendimento" : "Novo atendimento"}
-        editingItem={crud.editing}
+        editingItem={editingAppointment}
         onCancelEdit={() => crud.setEditing(null)}
         onSubmit={(values) => { onCreate(values); crud.setEditing(null); }}
         fields={[
-          { name: "patient", label: "Paciente", type: "select", options: patients.map((item) => item.name), required: true },
-          { name: "date", label: "Data e horário", type: "datetime-local", required: true },
-          { name: "type", label: "Tipo", type: "select", options: appointmentTypes },
-          { name: "specialty", label: "Especialidade" },
-          { name: "amount", label: "Valor", type: "number", required: true },
-          { name: "payment", label: "Status do pagamento", type: "select", options: paymentStatuses },
-          { name: "paymentMethod", label: "Forma de pagamento", type: "select", options: paymentMethods },
-          { name: "cardFee", label: "Taxas de cartão", type: "number" },
-          { name: "receivedAt", label: "Data do recebimento", type: "date" },
-          { name: "payer", label: "Quem pagou?" },
-          { name: "payerCpf", label: "CPF/CNPJ de quem pagou", mask: "cpfCnpj" },
-          { name: "payerRelation", label: "Vínculo", type: "select", options: ["Próprio paciente", "Pai", "Mãe", "Responsável", "Empresa", "Outro"] },
-          { name: "coverage", label: "Convênio ou particular", type: "select", options: ["Particular", "Convênio"] },
-          { name: "location", label: "Modalidade", type: "select", options: ["Presencial", "Online", "Domiciliar"] },
-          { name: "receiptNumber", label: "Recibo/NF" },
-          { name: "fiscalStatus", label: "Status documental", type: "select", options: ["Pendente", "Recibo emitido", "NF emitida"] },
-          { name: "account", label: "Conta de recebimento" },
-          { name: "attachment", label: "Comprovante/anexo" },
-          { name: "notes", label: "Observações" }
+          { name: "date", label: "Data do atendimento", type: "date", required: true },
+          { name: "amount", label: "Valor recebido (R$)", type: "text", placeholder: "Ex: 150,00", required: true },
+          { type: "section", label: "Pagador" },
+          { name: "payer", label: "Nome do pagador", placeholder: "Nome completo", required: true },
+          { name: "payerCpf", label: "CPF/CNPJ do pagador (11 ou 14 dígitos)", placeholder: "Somente números", mask: "cpfCnpj", digits: [11, 14], required: true, help: "Use CPF para pessoa física ou CNPJ para empresa/responsável PJ." },
+          { name: "sameAsPayer", label: "Paciente é o mesmo do pagador", type: "checkbox", defaultValue: false },
+          { type: "section", label: "Paciente" },
+          { name: "patientName", label: "Nome do paciente", placeholder: "Nome completo", required: (values) => !values.sameAsPayer, hiddenWhen: (values) => values.sameAsPayer },
+          { name: "patientCpf", label: "CPF do paciente (11 dígitos)", placeholder: "Somente números", mask: "cpfCnpj", digits: 11, required: (values) => !values.sameAsPayer, hiddenWhen: (values) => values.sameAsPayer },
+          { name: "documentNeed", label: "Paciente vai precisar de NF ou recibo?", type: "select", options: documentNeeds, required: true },
+          { name: "notes", label: "Observações", type: "textarea", span: "full", placeholder: "Opcional" }
         ]}
       />
       <Filters
         filters={[
-          { name: "patient", label: "Paciente", type: "select", options: patients.map((item) => item.name) },
-          { name: "status", label: "Status", type: "select", options: paymentStatuses },
-          { name: "type", label: "Tipo", type: "select", options: appointmentTypes },
+          { name: "search", label: "Buscar", placeholder: "Paciente, pagador ou CPF" },
+          { name: "documentNeed", label: "NF/Recibo", type: "select", options: documentNeeds },
           { name: "from", label: "De", type: "date" },
           { name: "to", label: "Até", type: "date" }
         ]}
         values={filters}
         onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
-        onClear={() => setFilters({ patient: "", status: "", type: "", from: "", to: "" })}
+        onClear={() => setFilters({ search: "", documentNeed: "", from: "", to: "" })}
       />
       <DataTable
         columns={[
           { key: "patient", label: "Paciente", primary: true },
-          { key: "dateFormatted", label: "Data" },
-          { key: "type", label: "Tipo" },
+          { key: "patientCpf", label: "CPF paciente" },
+          { key: "dateFormatted", label: "Atendimento" },
           { key: "amount", label: "Valor" },
-          { key: "status", label: "Pagamento", badge: true },
-          { key: "paymentMethod", label: "Forma" },
           { key: "payer", label: "Pagador" },
-          { key: "payerRelation", label: "Vínculo" },
-          { key: "fiscalStatus", label: "Doc.", badge: true }
+          { key: "payerCpf", label: "CPF/CNPJ pagador" },
+          { key: "documentNeed", label: "NF/Recibo", badge: true }
         ]}
         rows={rows}
         onView={crud.setViewing}
@@ -182,12 +175,10 @@ export function AppointmentsPage({ patients = [], appointments = [], onCreate, o
         { key: "payer", label: "Pagador" },
         { key: "payerCpf", label: "CPF/CNPJ do pagador" },
         { key: "payerRelation", label: "Vínculo" },
-        { key: "amount", label: "Valor bruto" },
-        { key: "cardFee", label: "Taxas" },
-        { key: "netAmount", label: "Valor líquido" },
-        { key: "paymentMethod", label: "Forma" },
-        { key: "account", label: "Conta" },
-        { key: "receiptNumber", label: "Recibo/NF" },
+        { key: "dateFormatted", label: "Data do atendimento" },
+        { key: "receivedFormatted", label: "Data do recebimento" },
+        { key: "amount", label: "Valor recebido" },
+        { key: "documentNeed", label: "Precisa de NF/recibo?" },
         { key: "notes", label: "Observações" }
       ]} />
       <ConfirmDialog item={crud.deleting} onCancel={() => crud.setDeleting(null)} onConfirm={(item) => { onDelete(item.id); crud.setDeleting(null); }} />
@@ -334,6 +325,7 @@ export function ExpensesPage({ expenses = [], onCreate, onDelete }) {
 
 export function ReportsPage({ appointments = [], expenses = [], patients = [] }) {
   const [filters, setFilters] = useState({ month: "", year: "", patient: "", status: "" });
+  const patientOptions = [...new Set([...patients.map((item) => item.name), ...appointments.map((item) => item.patient)].filter(Boolean))];
   const filteredAppointments = appointments
     .filter((item) => !filters.patient || item.patient === filters.patient)
     .filter((item) => !filters.status || item.status === filters.status)
@@ -351,7 +343,7 @@ export function ReportsPage({ appointments = [], expenses = [], patients = [] })
     valor: item.amount,
     status: item.status,
     forma: item.paymentMethod,
-    documento: item.fiscalStatus
+    documento: item.documentNeed || item.fiscalStatus
   }));
 
   return (
@@ -360,7 +352,7 @@ export function ReportsPage({ appointments = [], expenses = [], patients = [] })
         filters={[
           { name: "month", label: "Mês", type: "select", options: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"] },
           { name: "year", label: "Ano", placeholder: "2026" },
-          { name: "patient", label: "Paciente", type: "select", options: patients.map((item) => item.name) },
+          { name: "patient", label: "Paciente", type: "select", options: patientOptions },
           { name: "status", label: "Status", type: "select", options: paymentStatuses }
         ]}
         values={filters}
@@ -387,7 +379,7 @@ export function FiscalPage({ appointments = [], expenses = [], patients = [] }) 
   const revenue = appointments.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
   const expenseTotal = expenses.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
   const missingCpf = appointments.filter((item) => !item.payerCpf).length;
-  const noPaymentMethod = appointments.filter((item) => !item.paymentMethod).length;
+  const missingPatientCpf = appointments.filter((item) => !item.patientCpf).length;
   const noExpenseReceipt = expenses.filter((item) => !item.attachment).length;
   const incompletePatients = patients.filter((item) => !item.cpf || !item.phone).length;
 
@@ -397,12 +389,12 @@ export function FiscalPage({ appointments = [], expenses = [], patients = [] }) 
         <article><span>Profissionais vinculados</span><strong>1</strong><small>Dra. Jennyff</small></article>
         <article><span>Receita mensal</span><strong>{money(revenue)}</strong><small>Paciente, pagador e vínculo</small></article>
         <article><span>Despesas da atividade</span><strong>{money(expenseTotal)}</strong><small>Com dedutibilidade e comprovantes</small></article>
-        <article><span>Pendências documentais</span><strong>{missingCpf + noPaymentMethod + noExpenseReceipt + incompletePatients}</strong><small>Itens para cobrar do cliente</small></article>
+        <article><span>Pendências documentais</span><strong>{missingCpf + missingPatientCpf + noExpenseReceipt + incompletePatients}</strong><small>Itens para cobrar do cliente</small></article>
       </div>
       <div className="fiscal-grid accountant-grid">
         {[
           ["Atendimentos sem CPF do pagador", `${missingCpf} registros precisam de CPF/CNPJ do pagador.`],
-          ["Receitas sem forma de pagamento", `${noPaymentMethod} receitas sem Pix, cartão, dinheiro, transferência ou boleto.`],
+          ["Atendimentos sem CPF do paciente", `${missingPatientCpf} registros precisam de CPF do paciente.`],
           ["Despesas sem comprovante", `${noExpenseReceipt} despesas sem anexo ou referência de comprovante.`],
           ["Pacientes incompletos", `${incompletePatients} pacientes sem CPF ou telefone para conferência.`]
         ].map(([title, text]) => (

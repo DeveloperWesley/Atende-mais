@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "./Button.jsx";
-import { formatCpfCnpj, formatPhone } from "../utils/formatters.js";
+import { formatCpfCnpj, formatPhone, onlyDigits } from "../utils/formatters.js";
 
 export function QuickForm({ title, fields, submitLabel = "Salvar", onSubmit, editingItem, onCancelEdit }) {
+  const dataFields = useMemo(() => fields.filter((field) => field.name), [fields]);
   const initialValues = useMemo(
-    () => Object.fromEntries(fields.map((field) => [field.name, editingItem?.[field.name] ?? field.defaultValue ?? ""])),
-    [fields, editingItem]
+    () => Object.fromEntries(dataFields.map((field) => [field.name, editingItem?.[field.name] ?? field.defaultValue ?? (field.type === "checkbox" ? false : "")])),
+    [dataFields, editingItem]
   );
   const [values, setValues] = useState(initialValues);
   const [success, setSuccess] = useState("");
@@ -15,6 +16,18 @@ export function QuickForm({ title, fields, submitLabel = "Salvar", onSubmit, edi
     setValues(initialValues);
     setErrors({});
   }, [initialValues]);
+
+  function isFieldHidden(field) {
+    return typeof field.hiddenWhen === "function" ? field.hiddenWhen(values) : field.hiddenWhen;
+  }
+
+  function isFieldDisabled(field) {
+    return typeof field.disabledWhen === "function" ? field.disabledWhen(values) : field.disabled;
+  }
+
+  function isFieldRequired(field) {
+    return typeof field.required === "function" ? field.required(values) : field.required;
+  }
 
   function handleChange(fieldName, value) {
     const field = fields.find((item) => item.name === fieldName);
@@ -30,9 +43,24 @@ export function QuickForm({ title, fields, submitLabel = "Salvar", onSubmit, edi
     event.preventDefault();
     const nextErrors = {};
 
-    fields.forEach((field) => {
-      if (field.required && !String(values[field.name] || "").trim()) {
+    dataFields.filter((field) => !isFieldHidden(field)).forEach((field) => {
+      const value = values[field.name];
+
+      if (isFieldRequired(field) && !String(value || "").trim()) {
         nextErrors[field.name] = "Campo obrigatório.";
+      }
+
+      if (field.digits && value) {
+        const digitCount = onlyDigits(value).length;
+        const allowed = Array.isArray(field.digits) ? field.digits : [field.digits];
+        if (!allowed.includes(digitCount)) {
+          nextErrors[field.name] = `Informe ${allowed.join(" ou ")} dígitos.`;
+        }
+      }
+
+      if (field.validate) {
+        const message = field.validate(value, values);
+        if (message) nextErrors[field.name] = message;
       }
     });
 
@@ -51,33 +79,72 @@ export function QuickForm({ title, fields, submitLabel = "Salvar", onSubmit, edi
     <form className="quick-form" onSubmit={handleSubmit}>
       <h3>{title}</h3>
       <div className="form-grid">
-        {fields.map((field) => (
-          <label key={field.name}>
-            <span>{field.label}</span>
+        {fields.map((field) => {
+          if (field.type === "section") {
+            return <div className="form-section" key={field.label}>{field.label}</div>;
+          }
+
+          if (isFieldHidden(field)) return null;
+
+          const disabled = isFieldDisabled(field);
+          const required = isFieldRequired(field);
+          const className = [
+            field.span === "full" ? "field-full" : "",
+            field.type === "checkbox" ? "checkbox-field" : ""
+          ].filter(Boolean).join(" ");
+
+          return (
+          <label className={className} key={field.name}>
+            {field.type === "checkbox" ? (
+              <span className="checkbox-control">
+                <input
+                  type="checkbox"
+                  checked={Boolean(values[field.name])}
+                  disabled={disabled}
+                  onChange={(event) => handleChange(field.name, event.target.checked)}
+                />
+                <span>{field.label}</span>
+              </span>
+            ) : (
+              <span>{field.label}{required ? " *" : ""}</span>
+            )}
             {field.type === "select" ? (
               <select
-                required={field.required}
+                required={required}
+                disabled={disabled}
                 value={values[field.name]}
                 onChange={(event) => handleChange(field.name, event.target.value)}
               >
-                <option value="">Selecione</option>
+                <option value="">{field.placeholder || "Selecione"}</option>
                 {field.options.map((option) => (
                   <option key={option}>{option}</option>
                 ))}
               </select>
-            ) : (
-              <input
-                type={field.type || "text"}
+            ) : field.type === "textarea" ? (
+              <textarea
                 placeholder={field.placeholder}
-                required={field.required}
+                required={required}
+                disabled={disabled}
+                rows={field.rows || 4}
                 value={values[field.name]}
                 onChange={(event) => handleChange(field.name, event.target.value)}
               />
+            ) : field.type !== "checkbox" ? (
+              <input
+                type={field.type || "text"}
+                placeholder={field.placeholder}
+                required={required}
+                disabled={disabled}
+                value={values[field.name]}
+                onChange={(event) => handleChange(field.name, event.target.value)}
+              />
+            ) : (
+              null
             )}
             {field.help && <small className="field-help">{field.help}</small>}
             {errors[field.name] && <small className="field-error">{errors[field.name]}</small>}
           </label>
-        ))}
+        );})}
       </div>
       {success && <p className="form-success">{success}</p>}
       <div className="form-actions">

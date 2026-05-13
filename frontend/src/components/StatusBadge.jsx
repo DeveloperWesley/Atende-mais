@@ -12,7 +12,13 @@ const statusMap = {
   Incompleto: "warning",
   "Recibo emitido": "info",
   "NF emitida": "info",
-  "Dados completos": "success"
+  "Recibo solicitado": "info",
+  "NF solicitada": "info",
+  Recibo: "info",
+  "Nota fiscal": "info",
+  "Não precisa": "muted",
+  "Dados completos": "success",
+  "Dados incompletos": "warning"
 };
 
 export function StatusBadge({ value }) {

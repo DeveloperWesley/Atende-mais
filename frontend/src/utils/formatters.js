@@ -31,9 +31,12 @@ export function formatPhone(value = "") {
 
 export function parseCurrency(value) {
   if (typeof value === "number") return value;
-  const normalized = String(value || "0")
-    .replace(/[R$\s.]/g, "")
-    .replace(",", ".");
+  const raw = String(value || "0").replace(/[R$\s]/g, "");
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw.split(".").length > 2 || /\.\d{3}$/.test(raw)
+      ? raw.replace(/\./g, "")
+      : raw;
   return Number(normalized || 0);
 }
 

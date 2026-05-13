@@ -64,38 +64,43 @@ export function App() {
   }
 
   function addAppointment(values) {
-    const patient = store.patients.find((item) => item.name === values.patient);
-    const status = values.payment || "Pendente";
+    const sameAsPayer = Boolean(values.sameAsPayer);
+    const patientName = sameAsPayer ? values.payer : values.patientName;
+    const patientCpf = sameAsPayer ? values.payerCpf : values.patientCpf;
     const amountNumber = parseCurrency(values.amount);
-    const cardFeeNumber = parseCurrency(values.cardFee);
+    const cardFeeNumber = 0;
     const netAmountNumber = Math.max(amountNumber - cardFeeNumber, 0);
+    const documentNeed = values.documentNeed || "Não precisa";
     const appointment = {
       id: values.id || crypto.randomUUID(),
-      patient: values.patient,
-      patientCpf: patient?.cpf || "",
+      patient: patientName,
+      patientName,
+      patientCpf,
       date: values.date,
-      type: values.type || "Consulta",
-      specialty: values.specialty,
+      type: "Atendimento",
+      specialty: "",
       amount: money(amountNumber),
       amountNumber,
-      status,
-      paymentMethod: values.paymentMethod,
+      status: "Pago",
+      paymentMethod: "Não informado",
       cardFee: money(cardFeeNumber),
       cardFeeNumber,
       netAmount: money(netAmountNumber),
       netAmountNumber,
-      receivedAt: values.receivedAt,
-      payer: values.payer || values.patient,
+      receivedAt: values.date,
+      payer: values.payer,
       payerCpf: values.payerCpf,
-      payerRelation: values.payerRelation || "Próprio paciente",
-      coverage: values.coverage,
-      location: values.location,
-      receiptNumber: values.receiptNumber,
-      fiscalStatus: values.fiscalStatus || "Pendente",
-      account: values.account,
-      attachment: values.attachment,
+      payerRelation: sameAsPayer ? "Próprio paciente" : "Terceiro/responsável",
+      sameAsPayer,
+      documentNeed,
+      coverage: "",
+      location: "",
+      receiptNumber: "",
+      fiscalStatus: documentNeed === "Nota fiscal" ? "NF solicitada" : documentNeed === "Recibo" ? "Recibo solicitado" : "Não precisa",
+      account: "",
+      attachment: "",
       notes: values.notes,
-      accounting: values.payerCpf ? "Dados completos" : "Falta CPF do pagador"
+      accounting: values.payerCpf && patientCpf ? "Dados completos" : "Dados incompletos"
     };
 
     persistStore({

@@ -1165,19 +1165,31 @@ a {
 }
 
 input,
-select {
+select,
+textarea {
   background: #f8fbff;
   border: 1px solid #dbe7f7;
   border-radius: 8px;
   color: var(--ink);
-  min-height: 46px;
   outline: 0;
-  padding: 0 0.95rem;
   width: 100%;
 }
 
+input,
+select {
+  min-height: 46px;
+  padding: 0 0.95rem;
+}
+
+textarea {
+  min-height: 96px;
+  padding: 0.85rem 0.95rem;
+  resize: vertical;
+}
+
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: #1688ff;
   box-shadow: 0 0 0 4px rgba(22, 136, 255, 0.12);
 }
@@ -1186,6 +1198,47 @@ select:focus {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-section,
+.field-full {
+  grid-column: 1 / -1;
+}
+
+.form-section {
+  border-top: 1px solid #e5edf7;
+  color: #0d65df;
+  font-size: 0.78rem;
+  font-weight: 900;
+  margin-top: 0.2rem;
+  padding-top: 0.95rem;
+  text-transform: uppercase;
+}
+
+.checkbox-field {
+  align-self: end;
+}
+
+.checkbox-control {
+  align-items: center;
+  background: #f8fbff;
+  border: 1px solid #dbe7f7;
+  border-radius: 8px;
+  display: flex;
+  gap: 0.72rem;
+  min-height: 46px;
+  padding: 0 0.95rem;
+}
+
+.checkbox-control input {
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  width: 16px;
+}
+
+.checkbox-control span {
+  font-size: 0.86rem;
 }
 
 .field-help,
@@ -2342,6 +2395,8 @@ th {
 
 :root[data-theme="dark"] input,
 :root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] .checkbox-control,
 :root[data-theme="dark"] .quick-form,
 :root[data-theme="dark"] .panel,
 :root[data-theme="dark"] .record-card,
@@ -2403,7 +2458,8 @@ th {
 }
 
 :root[data-theme="dark"] input,
-:root[data-theme="dark"] select {
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea {
   color: var(--ink);
 }
 
