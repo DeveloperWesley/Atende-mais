@@ -2,12 +2,12 @@ import { useState } from "react";
 import { AppLayout } from "./layouts/AppLayout.jsx";
 import { LoginPage, RecoverPage, RegisterPage } from "./pages/AuthPages.jsx";
 import { Dashboard } from "./pages/Dashboard.jsx";
-import { AppointmentsPage, ExpensesPage, FinancePage, FiscalPage, PatientsPage, ReportsPage, SettingsPage } from "./pages/CrudPages.jsx";
+import { AppointmentsPage, FiscalPage, ReportsPage } from "./pages/CrudPages.jsx";
 import { LandingPage } from "./pages/LandingPage.jsx";
 import { DashboardSkeleton } from "./components/Skeleton.jsx";
 import { money, onlyDigits, parseCurrency } from "./utils/formatters.js";
 
-const protectedPages = new Set(["dashboard", "patients", "appointments", "finance", "expenses", "reports", "fiscal", "settings"]);
+const protectedPages = new Set(["dashboard", "appointments", "reports", "fiscal"]);
 const emptyStore = { patients: [], appointments: [], expenses: [] };
 
 function loadJson(key, fallback) {
@@ -200,13 +200,9 @@ export function App() {
 
   const pages = {
     dashboard: booting ? <DashboardSkeleton /> : <Dashboard onNavigate={setPage} store={store} />,
-    patients: <PatientsPage patients={store.patients} appointments={store.appointments} onCreate={addPatient} onDelete={(id) => deleteRecord("patients", id)} />,
     appointments: <AppointmentsPage patients={store.patients} appointments={store.appointments} onCreate={addAppointment} onDelete={(id) => deleteRecord("appointments", id)} />,
-    finance: <FinancePage appointments={store.appointments} expenses={store.expenses} />,
-    expenses: <ExpensesPage expenses={store.expenses} onCreate={addExpense} onDelete={(id) => deleteRecord("expenses", id)} />,
     reports: <ReportsPage appointments={store.appointments} expenses={store.expenses} patients={store.patients} />,
-    fiscal: <FiscalPage appointments={store.appointments} expenses={store.expenses} patients={store.patients} />,
-    settings: <SettingsPage />
+    fiscal: <FiscalPage appointments={store.appointments} expenses={store.expenses} patients={store.patients} />
   };
 
   return (

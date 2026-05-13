@@ -6,8 +6,7 @@ import { DataTable } from "../components/DataTable.jsx";
 import { DetailDrawer } from "../components/DetailDrawer.jsx";
 import { Filters } from "../components/Filters.jsx";
 import { QuickForm } from "../components/QuickForm.jsx";
-import { reports } from "../data/mockData.js";
-import { exportCsv, exportPrint } from "../utils/exporters.js";
+import { exportCsv, exportJson, exportPrint } from "../utils/exporters.js";
 import { formatDate, formatDateTime, isOverdue, money } from "../utils/formatters.js";
 
 const paymentStatuses = ["Pago", "Pendente", "Vencido", "Cancelado"];
@@ -20,6 +19,53 @@ function normalize(value) {
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
+}
+
+const monthNames = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+function competenceFromDate(value) {
+  if (!value) return "Sem data";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "Sem data";
+  return `${monthNames[date.getMonth()]}-${date.getFullYear()}`;
+}
+
+function documentNeedOf(item) {
+  if (item.documentNeed) return item.documentNeed;
+  if (item.fiscalStatus === "NF emitida" || item.fiscalStatus === "NF solicitada") return "Nota fiscal";
+  if (item.fiscalStatus === "Recibo emitido" || item.fiscalStatus === "Recibo solicitado") return "Recibo";
+  return "Não precisa";
+}
+
+function appointmentExportRows(items) {
+  return items.map((item) => ({
+    Data: formatDate(item.date),
+    Competencia: competenceFromDate(item.date),
+    Pagador_Nome: item.payer,
+    Pagador_CPF_CNPJ: item.payerCpf,
+    Paciente_Nome: item.patient,
+    Paciente_CPF_CNPJ: item.patientCpf,
+    NF_ou_Recibo: documentNeedOf(item),
+    Valor: item.amount,
+    Observacoes: item.notes || ""
+  }));
+}
+
+function groupedCompetences(appointments) {
+  const groups = new Map();
+  appointments.forEach((item) => {
+    const competence = competenceFromDate(item.date);
+    const current = groups.get(competence) || { id: competence, competence, count: 0, totalNumber: 0, fiscalCount: 0, items: [] };
+    current.count += 1;
+    current.totalNumber += Number(item.amountNumber || 0);
+    if (["Recibo", "Nota fiscal"].includes(documentNeedOf(item))) current.fiscalCount += 1;
+    current.items.push(item);
+    groups.set(competence, current);
+  });
+
+  return [...groups.values()]
+    .map((group) => ({ ...group, total: money(group.totalNumber), fiscal: `${group.fiscalCount} solicitação(ões)` }))
+    .sort((a, b) => a.competence.localeCompare(b.competence, "pt-BR", { numeric: true }));
 }
 
 function useCrudState() {
@@ -126,19 +172,19 @@ export function AppointmentsPage({ patients = [], appointments = [], onCreate, o
   const editingAppointment = crud.editing ? {
     ...crud.editing,
     patientName: crud.editing.patientName || crud.editing.patient,
-    documentNeed: crud.editing.documentNeed || (crud.editing.fiscalStatus === "NF emitida" ? "Nota fiscal" : crud.editing.fiscalStatus === "Recibo emitido" ? "Recibo" : "Não precisa"),
+    documentNeed: documentNeedOf(crud.editing),
     sameAsPayer: crud.editing.sameAsPayer ?? (crud.editing.patient === crud.editing.payer && crud.editing.patientCpf === crud.editing.payerCpf)
   } : null;
   const rows = appointments
     .filter((item) => !filters.search || normalize(`${item.patient} ${item.patientCpf} ${item.payer} ${item.payerCpf}`).includes(normalize(filters.search)))
-    .filter((item) => !filters.documentNeed || item.documentNeed === filters.documentNeed)
+    .filter((item) => !filters.documentNeed || documentNeedOf(item) === filters.documentNeed)
     .filter((item) => !filters.from || item.date?.slice(0, 10) >= filters.from)
     .filter((item) => !filters.to || item.date?.slice(0, 10) <= filters.to)
     .map((item) => ({
       ...item,
       dateFormatted: formatDate(item.date),
       receivedFormatted: formatDate(item.receivedAt),
-      documentNeed: item.documentNeed || (item.fiscalStatus === "NF emitida" ? "Nota fiscal" : item.fiscalStatus === "Recibo emitido" ? "Recibo" : "Não precisa")
+      documentNeed: documentNeedOf(item)
     }));
 
   return (
@@ -364,87 +410,137 @@ export function ExpensesPage({ expenses = [], onCreate, onDelete }) {
 }
 
 export function ReportsPage({ appointments = [], expenses = [], patients = [] }) {
-  const [filters, setFilters] = useState({ month: "", year: "", patient: "", status: "" });
-  const patientOptions = [...new Set([...patients.map((item) => item.name), ...appointments.map((item) => item.patient)].filter(Boolean))];
-  const filteredAppointments = appointments
-    .filter((item) => !filters.patient || item.patient === filters.patient)
-    .filter((item) => !filters.status || item.status === filters.status)
-    .filter((item) => !filters.month || item.date?.slice(5, 7) === filters.month)
-    .filter((item) => !filters.year || item.date?.slice(0, 4) === filters.year);
-
-  const reportRows = filteredAppointments.map((item) => ({
-    paciente: item.patient,
-    cpfPaciente: item.patientCpf,
-    pagador: item.payer,
-    cpfPagador: item.payerCpf,
-    vinculo: item.payerRelation,
-    data: formatDateTime(item.date),
-    recebidoEm: formatDate(item.receivedAt),
-    valor: item.amount,
-    status: item.status,
-    forma: item.paymentMethod,
-    documento: item.documentNeed || item.fiscalStatus
+  const [selectedCompetence, setSelectedCompetence] = useState("");
+  const groups = groupedCompetences(appointments);
+  const selectedGroup = groups.find((group) => group.competence === selectedCompetence);
+  const detailRows = (selectedGroup?.items || appointments).map((item) => ({
+    ...item,
+    dateFormatted: formatDate(item.date),
+    documentNeed: documentNeedOf(item)
   }));
+  const exportRows = appointmentExportRows(selectedGroup?.items || appointments);
 
   return (
-    <ResourcePage title="Relatórios" eyebrow="Filtros e exportações para gestão, contador e obrigações">
-      <Filters
-        filters={[
-          { name: "month", label: "Mês", type: "select", options: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"] },
-          { name: "year", label: "Ano", placeholder: "2026" },
-          { name: "patient", label: "Paciente", type: "select", options: patientOptions },
-          { name: "status", label: "Status", type: "select", options: paymentStatuses }
-        ]}
-        values={filters}
-        onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
-        onClear={() => setFilters({ month: "", year: "", patient: "", status: "" })}
-      />
-      <div className="report-grid">
-        {reports.concat(["Relatório anual para IRPF", "Livro-caixa", "Inadimplência", "Atendimentos sem documentação fiscal"]).map((report) => (
-          <article className="report-card" key={report}>
-            <FileSpreadsheet size={26} />
-            <strong>{report}</strong>
-            <div>
-              <Button variant="soft" onClick={() => exportCsv(`${report}.csv`, reportRows.length ? reportRows : [{ aviso: "Sem dados para exportar" }])}><Download size={16} /> CSV</Button>
-              <Button variant="soft" onClick={() => exportPrint(report)}><Download size={16} /> PDF</Button>
-            </div>
-          </article>
-        ))}
+    <ResourcePage title="Competências" eyebrow="Agrupe atendimentos por mês e exporte a base para conferência">
+      <div className="finance-summary">
+        <article><span>Competências</span><strong>{groups.length}</strong></article>
+        <article><span>Atendimentos</span><strong>{appointments.length}</strong></article>
+        <article><span>Total recebido</span><strong>{money(appointments.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0))}</strong></article>
+        <article><span>NF/Recibo</span><strong>{appointments.filter((item) => ["Recibo", "Nota fiscal"].includes(documentNeedOf(item))).length}</strong></article>
       </div>
+
+      <DataTable
+        columns={[
+          { key: "competence", label: "Mês", primary: true },
+          { key: "count", label: "Qtd" },
+          { key: "total", label: "Total" },
+          { key: "fiscal", label: "NF/Recibo" }
+        ]}
+        rows={groups}
+        onView={(group) => setSelectedCompetence(group.competence)}
+      />
+
+      <div className="report-grid">
+        <article className="report-card">
+          <FileSpreadsheet size={26} />
+          <strong>{selectedGroup ? `Base de ${selectedGroup.competence}` : "Base completa de atendimentos"}</strong>
+          <div>
+            <Button variant="soft" onClick={() => exportCsv(selectedGroup ? `atendimentos-${selectedGroup.competence}.csv` : "atendimentos-todos.csv", exportRows.length ? exportRows : [{ aviso: "Sem dados para exportar" }])}><Download size={16} /> CSV</Button>
+            <Button variant="soft" onClick={() => exportPrint(selectedGroup ? `Atendimentos - ${selectedGroup.competence}` : "Atendimentos") }><Download size={16} /> PDF</Button>
+          </div>
+        </article>
+      </div>
+
+      <DataTable
+        columns={[
+          { key: "patient", label: "Paciente", primary: true },
+          { key: "payer", label: "Pagador" },
+          { key: "dateFormatted", label: "Data" },
+          { key: "amount", label: "Valor" },
+          { key: "documentNeed", label: "NF/Recibo", badge: true }
+        ]}
+        rows={detailRows}
+      />
     </ResourcePage>
   );
 }
 
 export function FiscalPage({ appointments = [], expenses = [], patients = [] }) {
-  const revenue = appointments.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
-  const expenseTotal = expenses.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+  const [filters, setFilters] = useState({ competence: "", documentNeed: "", search: "" });
+  const groups = groupedCompetences(appointments);
+  const filtered = appointments
+    .filter((item) => !filters.competence || competenceFromDate(item.date) === filters.competence)
+    .filter((item) => !filters.documentNeed || documentNeedOf(item) === filters.documentNeed)
+    .filter((item) => !filters.search || normalize(`${item.patient} ${item.patientCpf} ${item.payer} ${item.payerCpf}`).includes(normalize(filters.search)));
+  const rows = filtered.map((item) => ({
+    ...item,
+    dateFormatted: formatDate(item.date),
+    competence: competenceFromDate(item.date),
+    documentNeed: documentNeedOf(item)
+  }));
+  const revenue = filtered.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
   const missingCpf = appointments.filter((item) => !item.payerCpf).length;
   const missingPatientCpf = appointments.filter((item) => !item.patientCpf).length;
-  const noExpenseReceipt = expenses.filter((item) => !item.attachment).length;
-  const incompletePatients = patients.filter((item) => !item.cpf || !item.phone).length;
+  const fiscalRequests = filtered.filter((item) => ["Recibo", "Nota fiscal"].includes(documentNeedOf(item))).length;
+  const exportRows = appointmentExportRows(filtered);
 
   return (
-    <ResourcePage title="Painel do contador/admin" eyebrow="Conferência dos dados alimentados pelos profissionais">
+    <ResourcePage title="Admin fiscal" eyebrow="Extraia dados para emissão de nota, Carnê-Leão, IRPF, IRRF e Receita Saúde">
       <div className="accountant-summary">
-        <article><span>Profissionais vinculados</span><strong>1</strong><small>Dra. Jennyff</small></article>
-        <article><span>Receita mensal</span><strong>{money(revenue)}</strong><small>Paciente, pagador e vínculo</small></article>
-        <article><span>Despesas da atividade</span><strong>{money(expenseTotal)}</strong><small>Com dedutibilidade e comprovantes</small></article>
-        <article><span>Pendências documentais</span><strong>{missingCpf + missingPatientCpf + noExpenseReceipt + incompletePatients}</strong><small>Itens para cobrar do cliente</small></article>
+        <article><span>Registros filtrados</span><strong>{filtered.length}</strong><small>Atendimentos prontos para conferência</small></article>
+        <article><span>Total recebido</span><strong>{money(revenue)}</strong><small>Base para Carnê-Leão/IRPF</small></article>
+        <article><span>NF/Recibo</span><strong>{fiscalRequests}</strong><small>Solicitações documentais</small></article>
+        <article><span>Pendências</span><strong>{missingCpf + missingPatientCpf}</strong><small>CPF/CNPJ ausente</small></article>
       </div>
-      <div className="fiscal-grid accountant-grid">
+
+      <Filters
+        filters={[
+          { name: "competence", label: "Competência", type: "select", options: groups.map((group) => group.competence) },
+          { name: "documentNeed", label: "NF/Recibo", type: "select", options: documentNeeds },
+          { name: "search", label: "Buscar", placeholder: "Paciente, pagador ou CPF/CNPJ" }
+        ]}
+        values={filters}
+        onChange={(name, value) => setFilters((current) => ({ ...current, [name]: value }))}
+        onClear={() => setFilters({ competence: "", documentNeed: "", search: "" })}
+      />
+
+      <div className="report-grid">
         {[
-          ["Atendimentos sem CPF do pagador", `${missingCpf} registros precisam de CPF/CNPJ do pagador.`],
-          ["Atendimentos sem CPF/CNPJ do paciente", `${missingPatientCpf} registros precisam de CPF/CNPJ do paciente.`],
-          ["Despesas sem comprovante", `${noExpenseReceipt} despesas sem anexo ou referência de comprovante.`],
-          ["Pacientes incompletos", `${incompletePatients} pacientes sem CPF ou telefone para conferência.`]
-        ].map(([title, text]) => (
-          <article className="panel" key={title}>
-            <h2>{title}</h2>
-            <p>{text}</p>
-            <Button variant="dark" onClick={() => exportCsv(`${title}.csv`, appointments.concat(expenses))}>Exportar base</Button>
+          ["Base para emissão de notas", rows.filter((item) => item.documentNeed === "Nota fiscal")],
+          ["Base Carnê-Leão / IRPF", rows],
+          ["Base Receita Saúde", rows],
+          ["Atendimentos com pendência de documento", rows.filter((item) => !item.payerCpf || !item.patientCpf)]
+        ].map(([title, list]) => (
+          <article className="report-card" key={title}>
+            <FileSpreadsheet size={26} />
+            <strong>{title}</strong>
+            <div>
+              <Button variant="soft" onClick={() => exportCsv(`${title}.csv`, appointmentExportRows(list).length ? appointmentExportRows(list) : [{ aviso: "Sem dados para exportar" }])}><Download size={16} /> CSV</Button>
+            </div>
           </article>
         ))}
+        <article className="report-card">
+          <FileSpreadsheet size={26} />
+          <strong>Backup JSON completo</strong>
+          <div>
+            <Button variant="soft" onClick={() => exportJson(`backup-atendimentos-${new Date().toISOString().slice(0, 10)}.json`, { exportedAt: new Date().toISOString(), appointments, patients })}><Download size={16} /> JSON</Button>
+          </div>
+        </article>
       </div>
+
+      <DataTable
+        columns={[
+          { key: "competence", label: "Competência" },
+          { key: "dateFormatted", label: "Data" },
+          { key: "payer", label: "Pagador", primary: true },
+          { key: "payerCpf", label: "CPF/CNPJ pagador" },
+          { key: "patient", label: "Paciente" },
+          { key: "patientCpf", label: "CPF/CNPJ paciente" },
+          { key: "documentNeed", label: "NF/Recibo", badge: true },
+          { key: "amount", label: "Valor" }
+        ]}
+        rows={rows}
+      />
     </ResourcePage>
   );
 }

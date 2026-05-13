@@ -14,7 +14,6 @@ import {
   Moon,
   Paperclip,
   Plus,
-  ReceiptText,
   ShieldCheck,
   UserPlus,
   WalletCards
@@ -43,10 +42,10 @@ export function LandingPage({ onNavigate }) {
       <section className="hero">
         <div className="hero-content">
           <span className="eyebrow"><Paperclip size={13} /> Feito para profissionais da saúde</span>
-          <h1>Controle de atendimentos, receitas e despesas para <strong>profissionais da saúde</strong></h1>
+          <h1>Controle de atendimentos para <strong>profissionais da saúde</strong></h1>
           <p>
-            Organize sua rotina financeira com clareza: atendimentos, valores recebidos,
-            pendências, documentos e dados fiscais em uma experiência rápida, visual e segura.
+            Registre atendimentos, pacientes, pagadores, valores recebidos e dados fiscais
+            em uma experiência rápida, visual e segura.
           </p>
           <div className="hero-actions">
             <Button onClick={() => onNavigate("register")}><ArrowRight size={19} /> Começar agora</Button>
@@ -81,9 +80,8 @@ export function LandingPage({ onNavigate }) {
                 {[
                   ["Resumo", Home],
                   ["Atendimentos", CalendarDays],
-                  ["Receitas", WalletCards],
-                  ["Despesas", ReceiptText],
-                  ["Relatórios", FileText]
+                  ["Competências", WalletCards],
+                  ["Admin fiscal", FileText]
                 ].map(([item, Icon], index) => (
                   <span className={index === 0 ? "selected" : ""} key={item}><Icon size={13} />{item}</span>
                 ))}
@@ -94,23 +92,22 @@ export function LandingPage({ onNavigate }) {
                 <p>Aqui está o resumo do seu consultório hoje.</p>
                 <div className="preview-actions">
                   <button className="active" type="button"><Plus size={13} />Novo atendimento</button>
-                  <button type="button"><UserPlus size={13} />Novo paciente</button>
-                  <button className="success" type="button"><Plus size={13} />Nova receita</button>
-                  <button className="danger" type="button"><Plus size={13} />Nova despesa</button>
-                  <button type="button"><FileText size={13} />Relatórios</button>
+                  <button type="button"><UserPlus size={13} />Cadastro automático</button>
+                  <button className="success" type="button"><FileText size={13} />Competências</button>
+                  <button type="button"><FileText size={13} />Exportações</button>
                 </div>
                 <div className="mini-metrics">
                   <article className="metric-blue"><CalendarDays size={17} /> <span>Atendimentos hoje</span><strong>12</strong><small>+20% vs ontem</small></article>
-                  <article className="metric-green"><WalletCards size={17} /> <span>Receitas do mês</span><strong>R$ 28.540,00</strong><small>+15% vs mês anterior</small></article>
-                  <article className="metric-red"><BarChart3 size={17} /> <span>Despesas do mês</span><strong>R$ 7.320,00</strong><small>-8% vs mês anterior</small></article>
-                  <article className="metric-green"><BarChart3 size={17} /> <span>Resultado do mês</span><strong>R$ 21.220,00</strong><small>+17% vs mês anterior</small></article>
+                  <article className="metric-green"><WalletCards size={17} /> <span>Valor recebido</span><strong>R$ 28.540,00</strong><small>base fiscal</small></article>
+                  <article className="metric-blue"><BarChart3 size={17} /> <span>Pacientes</span><strong>84</strong><small>cadastro automático</small></article>
+                  <article className="metric-green"><BarChart3 size={17} /> <span>NF/Recibo</span><strong>18</strong><small>solicitações</small></article>
                 </div>
                 <div className="mini-grid">
                   <div className="fake-chart">
                     <div className="fake-chart-head">
                       <div>
-                        <strong>Receitas x Despesas</strong>
-                        <small>Comparativo financeiro dos últimos meses</small>
+                        <strong>Atendimentos x valores</strong>
+                        <small>Comparativo dos últimos meses</small>
                       </div>
                       <em>Este mês</em>
                     </div>
@@ -132,7 +129,7 @@ export function LandingPage({ onNavigate }) {
                     <button type="button">Ver todas as pendências</button>
                   </div>
                   <div className="preview-timeline">
-                    <strong>Linha do tempo financeira</strong>
+                    <strong>Linha do tempo de atendimentos</strong>
                     <span><FileText size={14} />Tudo pronto para começar <small>Hoje</small></span>
                   </div>
                 </div>
@@ -148,9 +145,9 @@ export function LandingPage({ onNavigate }) {
         <div className="feature-grid">
           {[
             ["Atendimentos Inteligentes", "Organize seus atendimentos e tenha uma visão clara da sua rotina.", CalendarDays],
-            ["Receitas e Atendimentos", "Registre consultas, procedimentos e recebimentos com dados fiscais.", BriefcaseMedical],
-            ["Financeiro Completo", "Acompanhe receitas, despesas, pendências e pagamentos.", WalletCards],
-            ["Base para o Contador", "Organize dados financeiros para sua contabilidade apurar obrigações com segurança.", BarChart3]
+            ["Dados do pagador", "Guarde CPF/CNPJ de quem pagou e vínculo com o paciente.", BriefcaseMedical],
+            ["Competências mensais", "Veja quantidade, total recebido e exportação por mês.", WalletCards],
+            ["Admin fiscal", "Extraia bases para nota fiscal, Carnê-Leão, IRPF, IRRF e Receita Saúde.", BarChart3]
           ].map(([title, text, Icon]) => (
             <article className="feature-card" key={title}>
               <span><Icon size={28} /></span>

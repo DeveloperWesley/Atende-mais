@@ -8,9 +8,7 @@ import {
   LogOut,
   Menu,
   Moon,
-  ReceiptText,
   Sun,
-  WalletCards
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
@@ -20,10 +18,8 @@ import { Logo } from "../components/Logo.jsx";
 const nav = [
   { id: "dashboard", label: "Resumo", icon: Home },
   { id: "appointments", label: "Atendimentos", icon: CalendarDays },
-  { id: "finance", label: "Receitas", icon: WalletCards },
-  { id: "expenses", label: "Despesas", icon: ReceiptText },
-  { id: "reports", label: "Relatórios", icon: BarChart3 },
-  { id: "fiscal", label: "Contabilidade", icon: FileSpreadsheet }
+  { id: "reports", label: "Competências", icon: BarChart3 },
+  { id: "fiscal", label: "Admin fiscal", icon: FileSpreadsheet }
 ];
 
 export function AppLayout({ activePage, onNavigate, children, user, onLogout }) {

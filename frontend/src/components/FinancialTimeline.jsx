@@ -1,8 +1,8 @@
 import { motion } from "framer-motion";
-import { CalendarCheck, FileSpreadsheet, ReceiptText, WalletCards } from "lucide-react";
+import { CalendarCheck, FileSpreadsheet, WalletCards } from "lucide-react";
 import { formatDate, formatDateTime } from "../utils/formatters.js";
 
-export function FinancialTimeline({ appointments = [], expenses = [] }) {
+export function FinancialTimeline({ appointments = [] }) {
   const events = [
     ...appointments.slice(0, 4).map((item) => ({
       id: `appointment-${item.id}`,
@@ -19,14 +19,6 @@ export function FinancialTimeline({ appointments = [], expenses = [] }) {
       description: `${item.payer || item.patient} - ${item.netAmount || item.amount}`,
       date: formatDate(item.receivedAt),
       tone: "green"
-    })),
-    ...expenses.slice(0, 3).map((item) => ({
-      id: `expense-${item.id}`,
-      icon: ReceiptText,
-      title: "Despesa lançada",
-      description: `${item.category} - ${item.amount}`,
-      date: formatDate(item.date),
-      tone: "red"
     }))
   ].slice(0, 7);
 
@@ -35,7 +27,7 @@ export function FinancialTimeline({ appointments = [], expenses = [] }) {
       id: "empty-report",
       icon: FileSpreadsheet,
       title: "Tudo pronto para começar",
-      description: "Cadastre um atendimento, receita ou despesa para montar sua linha do tempo.",
+      description: "Cadastre um atendimento para montar sua linha do tempo.",
       date: "Hoje",
       tone: "blue"
     });
@@ -43,7 +35,7 @@ export function FinancialTimeline({ appointments = [], expenses = [] }) {
 
   return (
     <article className="timeline-panel">
-      <h2>Linha do tempo financeira</h2>
+      <h2>Linha do tempo de atendimentos</h2>
       <div className="timeline-list">
         {events.map((event, index) => (
           <motion.div

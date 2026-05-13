@@ -1,52 +1,48 @@
-import { BarChart3, CalendarDays, CheckCircle2, FileText, Plus, ReceiptText, TrendingUp, UserPlus, WalletCards } from "lucide-react";
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BarChart3, CalendarDays, CheckCircle2, Download, FileText, Plus, UsersRound } from "lucide-react";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { motion } from "framer-motion";
 import { FinancialTimeline } from "../components/FinancialTimeline.jsx";
-import { isOverdue, money } from "../utils/formatters.js";
+import { money } from "../utils/formatters.js";
 
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"];
+
+function documentNeedOf(item) {
+  if (item.documentNeed) return item.documentNeed;
+  if (item.fiscalStatus === "NF emitida" || item.fiscalStatus === "NF solicitada") return "Nota fiscal";
+  if (item.fiscalStatus === "Recibo emitido" || item.fiscalStatus === "Recibo solicitado") return "Recibo";
+  return "Não precisa";
+}
 
 export function Dashboard({ onNavigate, store }) {
   const today = new Date().toISOString().slice(0, 10);
   const appointments = store?.appointments || [];
-  const expenses = store?.expenses || [];
+  const patients = store?.patients || [];
   const appointmentsToday = appointments.filter((item) => item.date?.slice(0, 10) === today).length;
-  const revenue = appointments.filter((item) => item.status === "Pago").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
-  const pendingRevenue = appointments.filter((item) => item.status === "Pendente" || item.status === "Parcelado").reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
-  const expenseTotal = expenses.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
-  const overdueExpenses = expenses.filter((item) => isOverdue(item.dueDate, item.status)).length;
-  const unpaidAppointments = appointments.filter((item) => item.status !== "Pago" && item.status !== "Cancelado").length;
-  const missingCpf = appointments.filter((item) => !item.payerCpf).length;
-  const noReceiptExpenses = expenses.filter((item) => !item.attachment).length;
-  const missingFiscalStatus = appointments.filter((item) => !item.fiscalStatus || item.fiscalStatus === "Pendente").length;
-  const incompletePatients = (store?.patients || []).filter((item) => !item.cpf || !item.phone).length;
-  const pendingPatients = [
-    ...appointments.filter((item) => !item.payerCpf).map((item) => ({ name: `${item.patient}: falta CPF do pagador`, value: item.amount, target: "appointments" })),
-    ...appointments.filter((item) => item.status !== "Pago" && item.status !== "Cancelado").map((item) => ({ name: `${item.patient}: pagamento ${item.status?.toLowerCase()}`, value: item.amount, target: "finance" })),
-    ...expenses.filter((item) => !item.attachment).map((item) => ({ name: `${item.category}: sem comprovante`, value: item.amount, target: "expenses" }))
-  ].slice(0, 8);
-  const chartData = months.map((month) => ({ month, receitas: 0, despesas: 0 }));
+  const totalReceived = appointments.reduce((sum, item) => sum + Number(item.amountNumber || 0), 0);
+  const docRequests = appointments.filter((item) => ["Recibo", "Nota fiscal"].includes(documentNeedOf(item))).length;
+  const missingData = appointments.filter((item) => !item.payerCpf || !item.patientCpf).length;
+  const chartData = months.map((month) => ({ month, atendimentos: 0, recebido: 0 }));
 
   appointments.forEach((item) => {
-    const date = item.date ? new Date(item.date) : null;
-    if (date && !Number.isNaN(date.getTime()) && item.status === "Pago") {
-      chartData[date.getMonth()] && (chartData[date.getMonth()].receitas += Number(item.amountNumber || 0));
+    const date = item.date ? new Date(`${item.date.slice(0, 10)}T00:00:00`) : null;
+    if (date && !Number.isNaN(date.getTime()) && chartData[date.getMonth()]) {
+      chartData[date.getMonth()].atendimentos += 1;
+      chartData[date.getMonth()].recebido += Number(item.amountNumber || 0);
     }
   });
 
-  expenses.forEach((item) => {
-    const date = item.date ? new Date(`${item.date}T00:00:00`) : null;
-    if (date && !Number.isNaN(date.getTime())) {
-      chartData[date.getMonth()] && (chartData[date.getMonth()].despesas += Number(item.amountNumber || 0));
-    }
-  });
+  const pendingItems = [
+    ...appointments.filter((item) => !item.payerCpf).map((item) => ({ name: `${item.payer || item.patient}: falta CPF/CNPJ do pagador`, target: "appointments" })),
+    ...appointments.filter((item) => !item.patientCpf).map((item) => ({ name: `${item.patient}: falta CPF/CNPJ do paciente`, target: "appointments" })),
+    ...appointments.filter((item) => documentNeedOf(item) === "Nota fiscal").map((item) => ({ name: `${item.patient}: emitir nota fiscal`, target: "reports" })),
+    ...appointments.filter((item) => documentNeedOf(item) === "Recibo").map((item) => ({ name: `${item.patient}: emitir recibo`, target: "reports" }))
+  ].slice(0, 6);
 
-  const result = revenue - expenseTotal;
   const summaryCards = [
-    { label: "Atendimentos hoje", value: String(appointmentsToday), icon: CalendarDays, tone: "blue", trend: "+0%" },
-    { label: "Receitas do mês", value: money(revenue), icon: WalletCards, tone: "green", trend: "+0%" },
-    { label: "Despesas do mês", value: money(expenseTotal), icon: BarChart3, tone: "red", trend: "0%" },
-    { label: "Resultado do mês", value: money(result), icon: TrendingUp, tone: result < 0 ? "red" : "green", trend: result < 0 ? "negativo" : "positivo" }
+    { label: "Atendimentos hoje", value: String(appointmentsToday), icon: CalendarDays, tone: "blue", trend: `${appointments.length} no total` },
+    { label: "Valor recebido", value: money(totalReceived), icon: BarChart3, tone: "green", trend: "base para relatórios" },
+    { label: "Pacientes cadastrados", value: String(patients.length), icon: UsersRound, tone: "blue", trend: "cadastro automático" },
+    { label: "NF/Recibo", value: String(docRequests), icon: FileText, tone: missingData ? "red" : "green", trend: missingData ? `${missingData} incompletos` : "dados completos" }
   ];
 
   return (
@@ -54,24 +50,21 @@ export function Dashboard({ onNavigate, store }) {
       <div className="dashboard-hero-row">
         <div className="dashboard-greeting">
           <h1>Olá, Dra. Jennyff <span aria-hidden="true">👋</span></h1>
-          <p>Aqui está o resumo do seu consultório hoje.</p>
+          <p>Controle seus atendimentos e mantenha os dados prontos para o contador.</p>
         </div>
 
         <div className="post-login-actions" aria-label="Ações rápidas">
           <button className="quick-action primary" onClick={() => onNavigate("appointments")}><Plus size={17} /> Novo atendimento</button>
-          <button className="quick-action cyan" onClick={() => onNavigate("patients")}><UserPlus size={17} /> Novo paciente</button>
-          <button className="quick-action green" onClick={() => onNavigate("finance")}><WalletCards size={17} /> Nova receita</button>
-          <button className="quick-action red" onClick={() => onNavigate("expenses")}><ReceiptText size={17} /> Nova despesa</button>
-          <button className="quick-action dark" onClick={() => onNavigate("reports")}><FileText size={17} /> Relatórios</button>
+          <button className="quick-action green" onClick={() => onNavigate("reports")}><Download size={17} /> Competências</button>
         </div>
       </div>
 
       <div className="summary-cards">
         {summaryCards.map((card, index) => (
           <motion.button
-            className={`summary-card ${card.value.startsWith("-") ? "negative" : ""} ${card.tone}`}
+            className={`summary-card ${card.tone}`}
             key={card.label}
-            onClick={() => onNavigate(card.label.includes("Despesas") || card.label.includes("Contas") ? "expenses" : "finance")}
+            onClick={() => onNavigate(card.label.includes("NF") ? "reports" : "appointments")}
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.03 }}
@@ -88,61 +81,51 @@ export function Dashboard({ onNavigate, store }) {
         <article className="finance-chart-card">
           <div className="panel-heading">
             <div>
-              <h2>Receitas x Despesas</h2>
-              <p>Comparativo financeiro dos últimos meses</p>
+              <h2>Atendimentos e valores</h2>
+              <p>Visão rápida dos últimos meses para conferência</p>
             </div>
-            <select aria-label="Período do gráfico" defaultValue="Este mês">
-              <option>Este mês</option>
-              <option>Últimos 6 meses</option>
-              <option>Este ano</option>
-            </select>
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData} margin={{ top: 30, right: 18, left: 8, bottom: 12 }}>
               <CartesianGrid strokeDasharray="4 8" vertical={false} stroke="rgba(100,115,146,0.18)" />
               <XAxis dataKey="month" axisLine={false} tickLine={false} />
-              <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `${value / 1000}k`} />
+              <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `${value}`} />
               <Tooltip
                 contentStyle={{ border: "0", borderRadius: "12px", boxShadow: "0 16px 40px rgba(8,36,92,.16)" }}
-                formatter={(value) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                labelFormatter={(label) => `Mês: ${label}`}
+                formatter={(value, name) => name === "recebido" ? money(value) : value}
               />
-              <Legend iconType="circle" />
-              <Line type="monotone" dataKey="receitas" stroke="#18b889" strokeWidth={4} dot={{ r: 4, fill: "#18b889", strokeWidth: 0 }} />
-              <Line type="monotone" dataKey="despesas" stroke="#ff4d59" strokeWidth={4} dot={{ r: 4, fill: "#ff4d59", strokeWidth: 0 }} />
+              <Line type="monotone" dataKey="atendimentos" stroke="#0d65df" strokeWidth={4} dot={{ r: 4, fill: "#0d65df", strokeWidth: 0 }} />
+              <Line type="monotone" dataKey="recebido" stroke="#18b889" strokeWidth={4} dot={{ r: 4, fill: "#18b889", strokeWidth: 0 }} />
             </LineChart>
           </ResponsiveContainer>
-          {appointments.length === 0 && expenses.length === 0 && (
-            <p className="empty-chart">Cadastre atendimentos e despesas para visualizar o gráfico.</p>
-          )}
+          {appointments.length === 0 && <p className="empty-chart">Cadastre atendimentos para visualizar o gráfico.</p>}
         </article>
 
         <article className="pending-panel">
           <div className="panel-heading">
             <div>
               <h2>Pendências</h2>
-              <p>Itens que precisam de atenção</p>
+              <p>Dados que impactam nota, Carnê-Leão, IRPF ou Receita Saúde</p>
             </div>
           </div>
           <div className="pending-list">
-            {pendingPatients.length === 0 ? (
+            {pendingItems.length === 0 ? (
               <div className="empty-pending">
                 <CheckCircle2 size={54} />
                 <strong>Nenhuma pendência cadastrada.</strong>
-                <span>Tudo em dia! 🎉</span>
-                <button onClick={() => onNavigate("finance")}>Ver todas as pendências</button>
+                <span>Tudo em dia!</span>
+                <button onClick={() => onNavigate("appointments")}>Cadastrar atendimento</button>
               </div>
-            ) : pendingPatients.map((patient) => (
-              <button key={patient.name} onClick={() => onNavigate(patient.target)}>
-                <span>{patient.name}</span>
-                <strong>{patient.value}</strong>
+            ) : pendingItems.map((item) => (
+              <button key={item.name} onClick={() => onNavigate(item.target)}>
+                <span>{item.name}</span>
               </button>
             ))}
           </div>
         </article>
       </div>
 
-      <FinancialTimeline appointments={appointments} expenses={expenses} />
+      <FinancialTimeline appointments={appointments} />
     </section>
   );
 }

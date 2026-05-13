@@ -51,7 +51,7 @@ export function LoginPage({ onNavigate, onLogin }) {
 
     onLogin(user);
     setError("");
-    onNavigate("dashboard");
+    onNavigate(user.role === "admin" ? "fiscal" : "dashboard");
   }
 
   return (
@@ -73,11 +73,11 @@ export function LoginPage({ onNavigate, onLogin }) {
 
       <main className="login-hero">
         <section className="login-copy">
-          <span className="eyebrow"><LockKeyhole size={15} /> Acesso seguro para profissionais da saúde</span>
-          <h1>Controle de atendimentos, receitas e despesas para <strong>profissionais da saúde</strong></h1>
+          <span className="eyebrow"><LockKeyhole size={15} /> Acesso seguro para atendimentos</span>
+          <h1>Controle de atendimentos para <strong>profissionais da saúde</strong></h1>
           <p>
-            Entre no ATENDE+ para acompanhar sua agenda, pendências, recebimentos,
-            despesas e dados fiscais em um painel visual, rápido e seguro.
+            Entre no ATENDE+ para registrar atendimentos, pagadores, pacientes,
+            valores recebidos e dados que o contador precisa para as obrigações.
           </p>
           <div className="trust-row login-trust">
             <span><Cloud size={18} />100% em nuvem</span>
@@ -92,7 +92,7 @@ export function LoginPage({ onNavigate, onLogin }) {
             <div className="login-card-title">
               <span>Bem-vindo de volta</span>
               <h2>Fazer login</h2>
-              <p>Acesse seu painel financeiro e mantenha sua contabilidade organizada.</p>
+              <p>Acesse seu painel de atendimentos e mantenha os dados prontos para conferência fiscal.</p>
             </div>
             <div className="demo-access">
               <span>Acesso padrão</span>
@@ -145,11 +145,11 @@ export function LoginPage({ onNavigate, onLogin }) {
             </div>
               <div className="product-main">
                 <h3>Resumo da clínica</h3>
-                <p>Indicadores financeiros e fiscais do mês.</p>
+                <p>Indicadores de atendimentos e documentos do mês.</p>
                 <div className="mini-metrics">
                   <article><CalendarDays size={17} /> <span>Atendimentos hoje</span><strong>12</strong></article>
-                  <article><WalletCards size={17} /> <span>Receitas do mês</span><strong>R$ 28.540</strong></article>
-                  <article><BarChart3 size={17} /> <span>Pendências</span><strong>8</strong></article>
+                  <article><WalletCards size={17} /> <span>Valor recebido</span><strong>R$ 28.540</strong></article>
+                  <article><BarChart3 size={17} /> <span>NF/Recibo</span><strong>8</strong></article>
                 </div>
                 <div className="pending-card">
                   <strong>Próximos recebimentos</strong>
